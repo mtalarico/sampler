@@ -54,9 +54,5 @@ func init() {
 }
 
 func main() {
-	if compare.IsDryRun() {
-		compare.ReportCounts()
-	} else {
-		compare.CompareUserNamespaces()
-	}
+	compare.CompareUserNamespaces()
 }

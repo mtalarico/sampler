@@ -28,5 +28,7 @@ func (c *Comparer) GetEstimates(namespace ns.Namespace) (int64, int64) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
+
+	log.Info().Str("ns", namespace.String()).Msgf("source estimate: %d, target estimate: %d", sourceCount, targetCount)
 	return sourceCount, targetCount
 }

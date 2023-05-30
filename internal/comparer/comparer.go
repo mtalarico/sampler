@@ -34,28 +34,28 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 	}
 }
 
-func (c *Comparer) ReportCounts() {
-	c.forEachNamespace(c.dryRun)
-}
-
-// Iterates through all user namespaces and just reports the count for each
-func (c *Comparer) dryRun(namespace ns.Namespace) {
-	c.GetEstimates(namespace)
-	c.GetSampleSize(namespace)
-}
-
-// Iterates through all user namespaces and preforms comparison for each
+// Iterates through all user namespaces and preforms comparison for each. If dry run is set, reports counts and exits
 func (c *Comparer) CompareUserNamespaces() {
 	c.forEachNamespace(c.CompareNs)
 }
 
 // Preforms comparison on a single given namespace
 func (c *Comparer) CompareNs(namespace ns.Namespace) {
-	log.Info().Str("ns", namespace.String()).Msg("beginning verification")
+	if c.config.DryRun {
+		log.Debug().Str("ns", namespace.String()).Msg("beginning dry run")
+		c.GetEstimates(namespace)
+		c.GetSampleSize(namespace)
+		log.Debug().Str("ns", namespace.String()).Msg("finished dry run")
+		return
+	}
+
 	if !c.namespaceExistsOnTarget(namespace) {
+		log.Warn().Str("ns", namespace.String()).Msgf("%s does not exist on destination, skipping validation", namespace)
 		c.reporter.ReportMissingNamespace(namespace)
 		return
 	}
+
+	log.Debug().Str("ns", namespace.String()).Msg("beginning verification")
 	checkCountsResult := c.CompareEstimatedCounts(namespace)
 	indexCompareResult := c.CompareIndexes(namespace)
 	sampleContentResult := c.CompareSampleDocs(namespace)
@@ -67,10 +67,7 @@ func (c *Comparer) CompareNs(namespace ns.Namespace) {
 	} else {
 		log.Error().Str("ns", namespace.String()).Msg("one or more validation checks failed")
 	}
-}
-
-func (c *Comparer) IsDryRun() bool {
-	return c.config.DryRun
+	log.Debug().Str("ns", namespace.String()).Msg("finished verification")
 }
 
 // return a handle to the source collection for a namespace
