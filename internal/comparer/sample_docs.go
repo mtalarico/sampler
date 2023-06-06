@@ -9,6 +9,7 @@ import (
 
 	"sampler/internal/doc"
 	"sampler/internal/ns"
+	"sampler/internal/reporter"
 	"sampler/internal/util"
 	"sampler/internal/worker"
 
@@ -35,20 +36,6 @@ const (
 	TgtToSrc direction = "tgt -> src"
 )
 
-type DocSummary struct {
-	MissingSrc int
-	MissingTgt int
-	Mismatch   int
-	Equal      int
-}
-
-func (d *DocSummary) add(more DocSummary) {
-	d.MissingSrc += more.MissingSrc
-	d.MissingTgt += more.MissingTgt
-	d.Mismatch += more.Mismatch
-	d.Equal += more.Equal
-}
-
 func (b batch) add(doc bson.Raw) {
 	id := doc.Lookup("_id").String()
 	b[id] = doc
@@ -64,7 +51,7 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "sampleDocWorkers", "sw")
 	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
-		c.processDoc(iCtx, iLogger, namespace, jobs)
+		c.processDocs(iCtx, iLogger, namespace, jobs)
 	})
 
 	logger.Info().Msg("beginning document sample")
@@ -185,8 +172,8 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	}
 }
 
-func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, a documentBatch, b documentBatch) DocSummary {
-	var summary DocSummary
+func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, a documentBatch, b documentBatch) reporter.DocSummary {
+	var summary reporter.DocSummary
 	for key, aDoc := range a.batch {
 		if bDoc, ok := b.batch[key]; ok {
 			logger.Trace().Msgf("comparing %v to %v", aDoc, bDoc)
@@ -198,35 +185,38 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 				summary.Equal++
 				continue
 			}
-			logger.Error().Msg("docs are not the same.")
 			if len(comparison.MissingFieldOnDst) > 0 {
-				logger.Error().Msgf("%s is missing fields on the target", key)
+				logger.Debug().Msgf("%s is missing fields on the target", key)
 			}
 			if len(comparison.MissingFieldOnSrc) > 0 {
-				logger.Error().Msgf("%s is missing fields on the source", key)
+				logger.Debug().Msgf("%s is missing fields on the source", key)
 			}
 			if len(comparison.FieldContentsDiffer) > 0 {
-				logger.Error().Msgf("%s is different between the source and target", key)
+				logger.Debug().Msgf("%s is different between the source and target", key)
 			}
-			summary.Mismatch++
+			summary.Different++
 		} else {
-			logger.Error().Msgf("_id %v not found", key)
+			logger.Debug().Msgf("_id %v not found", key)
 			switch a.dir {
 			case SrcToTgt:
-				summary.MissingTgt++
+				summary.MissingOnTgt++
 			case TgtToSrc:
-				summary.MissingSrc++
+				summary.MissingOnSrc++
 			}
 		}
 	}
 	return summary
 }
 
-func (c *Comparer) processDoc(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, jobs chan documentBatch) {
-	var summary DocSummary
+func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, jobs chan documentBatch) {
 	for processing := range jobs {
 		logger = logger.With().Str("dir", processing.dir.String()).Logger()
 		lookedUp := c.batchFind(ctx, logger, namespace, processing)
-		summary.add(c.batchCompare(ctx, logger, namespace, processing, lookedUp))
+		summary := c.batchCompare(ctx, logger, namespace, processing, lookedUp)
+		if summary.HasMismatches() {
+			logger.Error().Msg("docs are not the same.")
+			c.reporter.ReportSampleSummary(namespace, processing.dir.String(), summary)
+		}
 	}
+
 }

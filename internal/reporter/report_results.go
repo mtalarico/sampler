@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type location string
@@ -32,6 +33,7 @@ type report struct {
 	namespace ns.Namespace
 	reason    string
 	details   []bson.E
+	direction string
 }
 
 func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.Time) Reporter {
@@ -129,6 +131,49 @@ func (r *Reporter) ReportMismatchIndex(namespace ns.Namespace, src *mongo.IndexS
 	r.queue <- rep
 }
 
+func (r *Reporter) ReportSampleSummary(namespace ns.Namespace, dir string, summary DocSummary) {
+	reason := "docSummary"
+	details := bson.D{
+		{"missingSrc", summary.MissingOnSrc},
+		{"missingTgt", summary.MissingOnTgt},
+	}
+
+	switch dir {
+	case "src -> tgt":
+		details = append(details, bson.E{"mismatches.srcToTgt", summary.Different})
+	case "tgt -> src":
+		details = append(details, bson.E{"mismatches.tgtToSrc", summary.Different})
+	}
+
+	rep := report{
+		namespace: namespace,
+		reason:    reason,
+		details:   details,
+		direction: dir,
+	}
+	r.queue <- rep
+}
+
+func (r *Reporter) appendDocSummary(rep report, logger zerolog.Logger) {
+	filter := bson.D{
+		{"reason", rep.reason},
+		{"run", r.startTime},
+		{"ns", rep.namespace.String()},
+	}
+
+	update := bson.D{
+		{"$inc", rep.details},
+	}
+
+	extJson, _ := bson.MarshalExtJSON(filter, false, false)
+	logger.Debug().Msgf("inserting report -- %s", extJson)
+	opts := options.Update().SetUpsert(true)
+	_, err := r.metaCollection().UpdateOne(context.TODO(), filter, update, opts)
+	if err != nil {
+		logger.Error().Err(err).Msgf("unable to append to doc summary -- %s", extJson)
+	}
+}
+
 func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	template := bson.D{
 		{"reason", rep.reason},
@@ -147,7 +192,11 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace.String()).Logger()
-		r.insertReport(rep, logger)
+		if rep.reason == "docSummary" {
+			r.appendDocSummary(rep, logger)
+		} else {
+			r.insertReport(rep, logger)
+		}
 	}
 }
 
