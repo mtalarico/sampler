@@ -2,6 +2,7 @@ package comparer
 
 import (
 	"context"
+	"math"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -75,12 +76,16 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	logger.Info().Msg("finished document sample")
 }
 
-// TODO LIMIT SAMPLE SIZE BY MAX 4%
 func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) int64 {
 	source, target := c.GetEstimates(ctx, namespace)
-	// we warn about estimated counts, but they are not guarenteed to be equal, so sample from the larger of the two
+	// we warn about estimated counts, but they are not guarenteed to be equal, so sample from the larger of both collections
 	max := util.Max64(source, target)
+	ceiling := int64(math.Round(float64(max) * 0.04))
 	sampleSize := util.GetSampleSize(max, c.config.Compare.Zscore, c.config.Compare.ErrorRate)
+	if ceiling > 100 && sampleSize > ceiling {
+		logger.Warn().Msgf("sample size %d too large, using maxSize %d", sampleSize, ceiling)
+		return ceiling
+	}
 	return sampleSize
 }
 
