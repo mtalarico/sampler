@@ -54,5 +54,6 @@ func init() {
 }
 
 func main() {
-	compare.CompareUserNamespaces()
+	ctx := context.Background()
+	compare.CompareAll(ctx)
 }

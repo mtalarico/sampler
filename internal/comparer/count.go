@@ -4,31 +4,32 @@ import (
 	"context"
 	"sampler/internal/ns"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
-func (c *Comparer) CompareEstimatedCounts(namespace ns.Namespace) bool {
-	source, target := c.GetEstimates(namespace)
+func (c *Comparer) CompareEstimatedCounts(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) bool {
+	logger = logger.With().Str("c", "count").Logger()
+	source, target := c.GetEstimates(ctx, logger, namespace)
 	if source != target {
 		c.reporter.ReportMismatchCount(namespace, source, target)
-		log.Warn().Str("c", "count").Str("ns", namespace.String()).Msg("estimated document counts don't match. (NOTE: this could be the result of metadata differences from unclean shutdowns, consider running a more exact countDocuments)")
+		logger.Warn().Msg("estimated document counts don't match. (NOTE: this could be the result of metadata differences from unclean shutdowns, consider running a more exact countDocuments)")
 		return false
 	}
-	log.Info().Str("c", "count").Str("ns", namespace.String()).Msg("estimated document match")
+	logger.Info().Msg("estimated document match")
 	return true
 }
 
-func (c *Comparer) GetEstimates(namespace ns.Namespace) (int64, int64) {
+func (c *Comparer) GetEstimates(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) (int64, int64) {
 	sourceCount, err := c.sourceCollection(namespace).EstimatedDocumentCount(context.TODO())
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		logger.Fatal().Err(err).Msg("")
 	}
 
 	targetCount, err := c.targetCollection(namespace).EstimatedDocumentCount(context.TODO())
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		logger.Fatal().Err(err).Msg("")
 	}
 
-	log.Info().Str("ns", namespace.String()).Msgf("source estimate: %d, target estimate: %d", sourceCount, targetCount)
+	logger.Info().Msgf("source estimate: %d, target estimate: %d", sourceCount, targetCount)
 	return sourceCount, targetCount
 }

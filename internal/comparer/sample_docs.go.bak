@@ -1,0 +1,185 @@
+package comparer
+
+import (
+	"context"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"sampler/internal/doc"
+	"sampler/internal/ns"
+	"sampler/internal/util"
+	"sampler/internal/worker"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+type documentBatch map[interface{}]bson.Raw
+
+// type docDiff struct {
+// 	numSame       int
+// 	numDiff       int
+// 	numMissingSrc int
+// 	numMissingTgt int
+// }
+
+func (d documentBatch) addDoc(doc bson.Raw) {
+	id := doc.Lookup("_id").String()
+	d[id] = doc
+}
+
+func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, reversed bool) bool {
+	logger = logger.With().Str("c", "sampleDoc").Bool("reversed", reversed).Logger()
+	cursor := c.sampleCursor(ctx, logger, namespace, reversed)
+	defer cursor.Close(context.TODO())
+	// TODO variable batch size based on doc size ( 256MB)
+	sourceBatch := make(documentBatch, BATCH_SIZE)
+	sourceJobs := make(chan documentBatch, 100)
+	// reports := make(chan struct{}, 1)
+	handle := worker.Start(ctx, logger, func(innerCtx context.Context, innerLogger zerolog.Logger) {
+		c.processDoc(ctx, namespace, buffer, differences, reversed)
+	})
+
+	docCount := 0
+	batchCount := 0
+	logger.Debug().Msg("beginning document check")
+	for cursor.Next(context.TODO()) {
+		var doc bson.Raw
+		cursor.Decode(&doc)
+		logger.Trace().Msgf("deseralized doc %v", doc)
+		sourceBatch.addDoc(doc)
+		docCount++
+
+		if docCount%BATCH_SIZE == 0 {
+			logger.Debug().Msgf("adding batch %d to be checked", batchCount+1)
+			sourceJobs <- sourceBatch
+			sourceBatch = make(documentBatch, BATCH_SIZE)
+			batchCount++
+		}
+	}
+	// if we counted more than one doc but the counter did not land on a clean batch size there should still be items in the map to be checked
+	if len(sourceBatch) != 0 {
+		logger.Debug().Msgf("adding batch %d to be checked", batchCount+1)
+		sourceJobs <- sourceBatch
+		batchCount++
+	}
+	logger.Trace().Msg("no more source jobs, closing channel")
+	close(sourceJobs)
+
+	// equal := worker.WaitForResults(context.WithValue(ctx, ctxkey.Str("workerName"), "sampleDocWorkers"), handle, reports)
+	// logger.Debug().Msg("finished document check")
+
+	// if equal {
+	// 	logger.Info().Msg("sample documents match.")
+	// 	return true
+	// } else {
+	// 	logger.Error().Msg("sample documents did not match.")
+	// 	return false
+	// }
+	handle.Wait()
+	return false
+}
+
+func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) int64 {
+	sourceColl := c.sourceCollection(namespace)
+	approxDocs, err := sourceColl.EstimatedDocumentCount(context.TODO(), nil)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("")
+	}
+	sampleSize := util.GetSampleSize(approxDocs, c.config.Compare.Zscore, c.config.Compare.ErrorRate)
+	logger.Info().Msgf("using sample size of %d for estimated %d source documents", sampleSize, approxDocs)
+	return sampleSize
+}
+
+func (c *Comparer) sampleCursor(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, reversed bool) *mongo.Cursor {
+	var sampleColl *mongo.Collection
+	if reversed {
+		sampleColl = c.targetCollection(namespace)
+	} else {
+		sampleColl = c.sourceCollection(namespace)
+	}
+	sampleSize := c.GetSampleSize(ctx, logger, namespace)
+
+	pipeline := bson.A{bson.D{{"$sample", bson.D{{"size", sampleSize}}}}}
+	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
+	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
+
+	cursor, err := sampleColl.Aggregate(context.TODO(), pipeline, opts)
+	if err != nil {
+		log.Fatal().Err(err).Msg("")
+	}
+	return cursor
+}
+
+func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, sourceJobs documentBatch, reversed bool) documentBatch {
+	targetBuffer := make(documentBatch, BATCH_SIZE)
+	var keys []bson.RawValue
+
+	for _, value := range sourceJobs {
+		keys = append(keys, value.Lookup("_id"))
+	}
+	filter := bson.M{"_id": bson.M{"$in": keys}}
+
+	log.Trace().Msgf("filter: %s", filter)
+
+	var cursor *mongo.Cursor
+	var err error
+	if reversed {
+		cursor, err = c.sourceCollection(namespace).Find(context.TODO(), filter)
+	} else {
+		cursor, err = c.targetCollection(namespace).Find(context.TODO(), filter)
+	}
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("")
+	}
+	defer cursor.Close(context.TODO())
+	for cursor.Next(context.TODO()) {
+		var doc bson.Raw
+		cursor.Decode(&doc)
+		id := doc.Lookup("_id").String()
+
+		targetBuffer[id] = doc
+	}
+	if err != nil {
+		log.Fatal().Err(err).Msg("")
+	}
+	return targetBuffer
+}
+
+func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, sourceJobs documentBatch, targetDocs documentBatch, differences chan struct{}) {
+	for key, sourceDoc := range sourceJobs {
+		if targetDoc, ok := targetDocs[key]; ok {
+			mismatchDetails, err := doc.BsonUnorderedCompareRawDocumentWithDetails(sourceDoc, targetDoc)
+			if err != nil {
+				log.Fatal().Err(err).Msg("")
+			}
+			if mismatchDetails != nil {
+				if c.config.Compare.PrintWholeDoc {
+					log.Trace().Str("c", "sampleDoc").Str("ns", namespace.String()).Msgf("doc %v on source is not equal to doc %v on destination", sourceDoc, targetDoc)
+				} else {
+					log.Trace().Str("c", "sampleDoc").Str("ns", namespace.String()).Msgf("_id %v on source is not equal to _id %v on destination", sourceDoc.Lookup("_id"), targetDoc.Lookup("_id"))
+				}
+				log.Trace().Msgf("\treason: %#v\n", mismatchDetails)
+				differences <- struct{}{}
+			}
+		} else {
+			log.Trace().Str("c", "sampleDoc").Str("ns", namespace.String()).Msgf("_id %v not found on target", sourceDoc)
+			differences <- struct{}{}
+		}
+	}
+}
+
+func (c *Comparer) processDoc(ctx context.Context, logger zerolog.Logger, jobs chan documentBatch, inequalities chan struct{}, reversed bool) {
+	for sourceBatch := range jobs {
+		if len(sourceBatch) == 0 {
+			continue
+		}
+		logger.Debug().Msg("processing batch")
+		targetBuffer := c.batchFind(ctx, logger, namespace, sourceBatch, reversed)
+		c.batchCompare(ctx, namespace, logger, sourceBatch, targetBuffer, inequalities)
+	}
+	logger.Debug().Msg("finished batch")
+}

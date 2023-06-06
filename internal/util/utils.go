@@ -2,6 +2,7 @@ package util
 
 import (
 	"math"
+	"sort"
 	"strings"
 )
 
@@ -36,14 +37,15 @@ func CleanPath(path string) string {
 	return cleaned
 }
 
-func FormatIndexName(raw string) string {
-	minusAcending := strings.ReplaceAll(raw, "_1", "")
-	minusDescending := strings.ReplaceAll(minusAcending, "_-1", "")
-	minusText := strings.ReplaceAll(minusDescending, "_text", "")
-	minusHash := strings.ReplaceAll(minusText, "_hashed", "")
-	minusWildcard := strings.ReplaceAll(minusHash, ".$**", "")
-	minus2dSphere := strings.ReplaceAll(minusWildcard, "_2dsphere", "")
-	minus2d := strings.ReplaceAll(minus2dSphere, "_2d", "")
-	minusGeoHaystack := strings.ReplaceAll(minus2d, "_geoHaystack", "")
-	return minusGeoHaystack
+type Named interface {
+	GetName() string
+}
+
+func SortSpec[T Named](spec []T) []T {
+	sort.SliceStable(spec, func(a, b int) bool {
+		src := spec[a].GetName()
+		tgt := spec[b].GetName()
+		return src < tgt
+	})
+	return spec
 }

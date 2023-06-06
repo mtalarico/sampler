@@ -11,8 +11,9 @@ import (
 )
 
 type Namespace struct {
-	Db         string
-	Collection string
+	Db            string
+	Collection    string
+	Specification *mongo.CollectionSpecification
 }
 
 func (ns Namespace) String() string {
@@ -29,33 +30,33 @@ var (
 
 // Lists all the user collections on a cluster.  Unlike mongosync, we don't use the internal $listCatalog, since we need to
 // work on old versions without that command.  This means this does not run with read concern majority.
-func ListAllUserCollections(ctx context.Context, client *mongo.Client, includeViews bool,
-	additionalExcludedDBs ...string) ([]Namespace, error) {
+func UserCollections(client *mongo.Client, includeViews bool, additionalExcludedDBs ...string) ([]Namespace, error) {
 	excludedDBs := []string{}
 	excludedDBs = append(excludedDBs, additionalExcludedDBs...)
 	excludedDBs = append(excludedDBs, ExcludedSystemDBs...)
 
-	dbNames, err := client.ListDatabaseNames(ctx, bson.D{{"name", bson.D{{"$nin", excludedDBs}}}})
+	dbNames, err := client.ListDatabaseNames(context.TODO(), bson.D{{"name", bson.D{{"$nin", excludedDBs}}}}, options.ListDatabases().SetNameOnly(true))
 	if err != nil {
 		return nil, err
 	}
 	log.Debug().Msgf("all user databases: %+v", dbNames)
 
-	collectionNamespaces := []Namespace{}
+	namespaces := []Namespace{}
 	for _, dbName := range dbNames {
 		db := client.Database(dbName)
 		filter := bson.D{{"name", bson.D{{"$nin", bson.A{ExcludedSystemCollRegex}}}}}
 		if !includeViews {
 			filter = append(filter, bson.E{"type", bson.D{{"$ne", "view"}}})
 		}
-		specifications, err := db.ListCollectionSpecifications(ctx, filter, options.ListCollections().SetNameOnly(true))
+		specifications, err := db.ListCollectionSpecifications(context.TODO(), filter, nil)
 		if err != nil {
 			return nil, err
 		}
-		log.Debug().Msgf("collections for database %s: %+v", dbName, specifications)
 		for _, spec := range specifications {
-			collectionNamespaces = append(collectionNamespaces, Namespace{Db: dbName, Collection: spec.Name})
+			log.Trace().Msgf("found coll spec %v", spec)
+			ns := Namespace{Db: dbName, Collection: spec.Name, Specification: spec}
+			namespaces = append(namespaces, ns)
 		}
 	}
-	return collectionNamespaces, nil
+	return namespaces, nil
 }

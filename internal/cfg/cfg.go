@@ -48,7 +48,7 @@ func Init() Configuration {
 	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "error rate as a float percentage")
 
 	flag.StringVar(&config.Verbosity, "verbosity", "info", fmt.Sprintf("%s\n\t- options: %s", "log level", "'error', 'warn', 'info', 'debug', 'trace'"))
-	flag.StringVar(&config.LogFile, "file", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
+	flag.StringVar(&config.LogFile, "filePath", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
 	flag.BoolVar(&config.CleanMeta, "cleanMeta", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.DryRun, "dryRun", false, "reports estimated counts + calculated sample size based on input z and error rate, then exits. Cannot be used in congunction with cleanMeta")
 

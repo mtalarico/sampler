@@ -5,22 +5,28 @@ import (
 	"sampler/internal/cfg"
 	"sampler/internal/ns"
 	"sampler/internal/reporter"
+	"sampler/internal/worker"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // hard code batch size of 100
 const BATCH_SIZE int = 100
+const NUM_WORKERS int = 4
 
-// Conducts comparison between one or more namespaces. Comparison includes 1) estimated document count 2) index comparison 3) random sampling of documents (unordered field comparison)
+// Conducts comparison between one or more namespaces.
+// Comparison includes
+//  1. metadata & index comparison
+//  2. estimated document count
+//  3. random sampling of documents (unordered field comparison)
 type Comparer struct {
 	config       cfg.Configuration
 	sourceClient mongo.Client
 	targetClient mongo.Client
-	reporter     reporter.Reporter
+	reporter     *reporter.Reporter
 }
 
 func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.Client, meta *mongo.Client, startTime time.Time) Comparer {
@@ -30,44 +36,57 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 		config:       config,
 		sourceClient: *source,
 		targetClient: *target,
-		reporter:     reporter,
+		reporter:     &reporter,
 	}
 }
 
-// Iterates through all user namespaces and preforms comparison for each. If dry run is set, reports counts and exits
-func (c *Comparer) CompareUserNamespaces() {
-	c.forEachNamespace(c.CompareNs)
+func (c *Comparer) CompareAll(ctx context.Context) {
+	namespacesToProcess := make(chan ns.Namespace)
+	logger := log.With().Logger()
+
+	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "namespaceWorkers")
+	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
+		c.processNS(iCtx, iLogger, namespacesToProcess)
+	})
+
+	c.streamNamespaces(ctx, namespacesToProcess)
+
+	close(namespacesToProcess)
+	pool.Done()
+	c.reporter.Done(ctx, logger)
 }
 
-// Preforms comparison on a single given namespace
-func (c *Comparer) CompareNs(namespace ns.Namespace) {
+// Preforms comparison on a single namespace
+func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	if c.config.DryRun {
-		log.Debug().Str("ns", namespace.String()).Msg("beginning dry run")
-		c.GetEstimates(namespace)
-		c.GetSampleSize(namespace)
-		log.Debug().Str("ns", namespace.String()).Msg("finished dry run")
+		logger.Debug().Msg("beginning dry run")
+		c.GetEstimates(ctx, logger, namespace)
+		// c.GetSampleSize(ctx, logger, namespace)
+		logger.Debug().Msg("finished dry run")
 		return
 	}
 
-	if !c.namespaceExistsOnTarget(namespace) {
-		log.Warn().Str("ns", namespace.String()).Msgf("%s does not exist on destination, skipping validation", namespace)
-		c.reporter.ReportMissingNamespace(namespace)
-		return
-	}
+	logger.Debug().Msg("beginning validation")
+	checkCountsResult := c.CompareEstimatedCounts(ctx, logger, namespace)
+	indexCompareResult := c.CompareIndexes(ctx, logger, namespace)
+	// sampleForwardResult := c.CompareSampleDocs(ctx, logger, namespace, false)
+	// sampleReverseResult := c.CompareSampleDocs(ctx, logger, namespace, true)
 
-	log.Debug().Str("ns", namespace.String()).Msg("beginning verification")
-	checkCountsResult := c.CompareEstimatedCounts(namespace)
-	indexCompareResult := c.CompareIndexes(namespace)
-	sampleContentResult := c.CompareSampleDocs(namespace)
-
-	if checkCountsResult && indexCompareResult && sampleContentResult {
-		log.Info().Str("ns", namespace.String()).Msg("passed all validation checks")
-	} else if !checkCountsResult && indexCompareResult && sampleContentResult {
-		log.Warn().Str("ns", namespace.String()).Msg("failed estimated count comparison, but passed other validation checks. Consider running countDocuments")
+	if checkCountsResult && indexCompareResult { // && sampleForwardResult && sampleReverseResult {
+		logger.Info().Msg("passed all validation checks")
+	} else if !checkCountsResult && indexCompareResult { //&& sampleForwardResult && sampleReverseResult {
+		logger.Warn().Msg("failed estimated count comparison, but passed other validation checks. Consider running countDocuments")
 	} else {
-		log.Error().Str("ns", namespace.String()).Msg("one or more validation checks failed")
+		logger.Error().Msg("one or more validation checks failed")
 	}
-	log.Debug().Str("ns", namespace.String()).Msg("finished verification")
+	logger.Debug().Msg("finished validation")
+}
+
+func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs chan ns.Namespace) {
+	for namespace := range jobs {
+		logger = logger.With().Str("ns", namespace.String()).Logger()
+		c.CompareNs(ctx, logger, namespace)
+	}
 }
 
 // return a handle to the source collection for a namespace
@@ -78,33 +97,4 @@ func (c *Comparer) sourceCollection(namespace ns.Namespace) *mongo.Collection {
 // return a handle to the target collection for a namespace
 func (c *Comparer) targetCollection(namespace ns.Namespace) *mongo.Collection {
 	return c.targetClient.Database(namespace.Db).Collection(namespace.Collection)
-}
-
-// return a handle to the target collection for a namespace
-func (c *Comparer) namespaceExistsOnTarget(namespace ns.Namespace) bool {
-	filter := bson.D{{"name", namespace.Collection}}
-	ret, err := c.targetClient.Database(namespace.Db).ListCollectionNames(context.TODO(), filter)
-	if err != nil {
-		log.Error().Err(err).Msg("")
-	}
-	if len(ret) > 0 {
-		return true
-	}
-	return false
-}
-
-// Iterates through all user namespaces and calls the given function on each
-func (c *Comparer) forEachNamespace(f func(ns.Namespace)) {
-	namespaces, err := ns.ListAllUserCollections(context.TODO(), &c.sourceClient, false, c.config.MetaDBName)
-	if err != nil {
-		log.Error().Err(err).Msg("")
-		return
-	}
-	if len(namespaces) == 0 {
-		log.Warn().Msg("No user namespaces found.")
-		return
-	}
-	for _, namespace := range namespaces {
-		f(namespace)
-	}
 }
