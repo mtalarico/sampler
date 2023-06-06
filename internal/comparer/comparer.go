@@ -59,20 +59,20 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 // Preforms comparison on a single namespace
 func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	if c.config.DryRun {
-		logger.Debug().Msg("beginning dry run")
+		logger.Info().Msg("beginning dry run")
 		c.GetEstimates(ctx, logger, namespace)
 		// c.GetSampleSize(ctx, logger, namespace)
-		logger.Debug().Msg("finished dry run")
+		logger.Info().Msg("finished dry run")
 		return
 	}
 
-	logger.Debug().Msg("beginning validation")
+	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
 	// c.CompareSampleDocs(ctx, logger, namespace, false)
 	// c.CompareSampleDocs(ctx, logger, namespace, true)
 
-	logger.Debug().Msg("finished validation")
+	logger.Info().Msg("finished validation")
 }
 
 func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs chan ns.Namespace) {

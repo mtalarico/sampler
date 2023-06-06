@@ -22,23 +22,25 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	comparison := diff.Diff(sortedSource, sortedTarget)
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
-		logger.Error().Msg("indexes are not the same.")
-	} else {
-		logger.Info().Msg("indexes match.")
+		logger.Warn().Msg("there are namespace mismatches between source and destination")
 	}
 	for _, each := range comparison.MissingOnSrc {
+		logger.Warn().Str("ns", each.Namespace.String()).Msg("exists on the source but not the target")
 		c.reporter.ReportMissingNamespace(each.Namespace, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
+		logger.Warn().Str("ns", each.Namespace.String()).Msg("exists on the target but not the source")
 		c.reporter.ReportMissingNamespace(each.Namespace, "target")
 	}
 	for _, each := range comparison.Different {
+		logger.Warn().Str("ns", each.Source.Namespace.String()).Msg("different between the source and target")
+
 		c.reporter.ReportMismatchNamespace(each.Source.Namespace, each.Target.Namespace)
-		logger.Trace().Msgf("putting %s on the channel", each.Source.Namespace)
+		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
 		ret <- each.Source.Namespace
 	}
 	for _, each := range comparison.Equal {
-		logger.Trace().Msgf("putting %s on the channel", each.Namespace)
+		logger.Trace().Msgf("putting ns %s on channel", each.Namespace)
 		ret <- each.Namespace
 	}
 
