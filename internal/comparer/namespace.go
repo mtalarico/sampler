@@ -15,6 +15,16 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	logger = logger.With().Str("c", "namespace").Logger()
 
 	source, target := c.getNamespaces(ctx)
+
+	if len(source) == 0 {
+		logger.Error().Msg("no namespaces found on source, nothing to compare")
+		return
+	}
+	if len(target) == 0 {
+		logger.Error().Msg("no namespaces found on target, nothing to compare")
+		return
+	}
+
 	wrappedSource, wrappedTarget := wrapColls(source), wrapColls(target)
 	sortedSource := util.SortSpec(wrappedSource)
 	sortedTarget := util.SortSpec(wrappedTarget)
@@ -23,13 +33,15 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
 		logger.Error().Msg("there are namespace mismatches between source and destination")
+		logger.Debug().Msgf("%s", comparison.String())
+
 	}
 	for _, each := range comparison.MissingOnSrc {
-		logger.Error().Str("ns", each.Namespace.String()).Msg("exists on the source but not the target")
+		logger.Error().Str("ns", each.Namespace.String()).Msg("is missing on the target")
 		c.reporter.ReportMissingNamespace(each.Namespace, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
-		logger.Error().Str("ns", each.Namespace.String()).Msg("exists on the target but not the source")
+		logger.Error().Str("ns", each.Namespace.String()).Msg("is missing on the source")
 		c.reporter.ReportMissingNamespace(each.Namespace, "target")
 	}
 	for _, each := range comparison.Different {

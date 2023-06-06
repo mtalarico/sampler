@@ -8,9 +8,9 @@ import (
 )
 
 type MismatchDetails struct {
-	missingFieldOnSrc   []string
-	missingFieldOnDst   []string
-	fieldContentsDiffer []string
+	MissingFieldOnSrc   []string
+	MissingFieldOnDst   []string
+	FieldContentsDiffer []string
 }
 
 // Compares two bson documents, ignoring order in the document and subdocuments, and returns the details
@@ -65,7 +65,7 @@ func bsonUnorderedCompareRawElements(srcElements, dstElements []bson.RawElement,
 		key, dstValue := dstElement.Key(), dstElement.Value()
 		srcValue, ok := srcMap[key]
 		if !ok {
-			mismatchDetails.missingFieldOnSrc = append(mismatchDetails.missingFieldOnSrc, key)
+			mismatchDetails.MissingFieldOnSrc = append(mismatchDetails.MissingFieldOnSrc, key)
 			anyMismatch = true
 		} else {
 			srcMapUsed[key] = true
@@ -74,7 +74,7 @@ func bsonUnorderedCompareRawElements(srcElements, dstElements []bson.RawElement,
 				return nil, err
 			}
 			if !result {
-				mismatchDetails.fieldContentsDiffer = append(mismatchDetails.fieldContentsDiffer, key)
+				mismatchDetails.FieldContentsDiffer = append(mismatchDetails.FieldContentsDiffer, key)
 				anyMismatch = true
 			}
 		}
@@ -88,7 +88,7 @@ func bsonUnorderedCompareRawElements(srcElements, dstElements []bson.RawElement,
 		for key := range srcMap {
 			_, ok := srcMapUsed[key]
 			if !ok {
-				mismatchDetails.missingFieldOnDst = append(mismatchDetails.missingFieldOnDst, key)
+				mismatchDetails.MissingFieldOnDst = append(mismatchDetails.MissingFieldOnDst, key)
 				anyMismatch = true
 				if stopOnMismatch {
 					return &mismatchDetails, nil

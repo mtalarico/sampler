@@ -45,9 +45,9 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.ElementsMatch(t, result.missingFieldOnDst, []string{"a", "b"})
-		assert.Empty(t, result.fieldContentsDiffer)
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.ElementsMatch(t, result.MissingFieldOnDst, []string{"a", "b"})
+		assert.Empty(t, result.FieldContentsDiffer)
 	}
 
 	// Missing fields on src
@@ -60,9 +60,9 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.ElementsMatch(t, result.missingFieldOnSrc, []string{"aa", "c"})
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.Empty(t, result.fieldContentsDiffer)
+		assert.ElementsMatch(t, result.MissingFieldOnSrc, []string{"aa", "c"})
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.Empty(t, result.FieldContentsDiffer)
 	}
 
 	// Top level order is changed
@@ -103,9 +103,9 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"b", "c"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"b", "c"})
 	}
 
 	// Different values
@@ -122,9 +122,9 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"b", "c"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"b", "c"})
 	}
 
 	// Multiple mismtaches of different sorts
@@ -143,9 +143,9 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.ElementsMatch(t, result.missingFieldOnSrc, []string{"e"})
-		assert.ElementsMatch(t, result.missingFieldOnDst, []string{"bb"})
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"c"})
+		assert.ElementsMatch(t, result.MissingFieldOnSrc, []string{"e"})
+		assert.ElementsMatch(t, result.MissingFieldOnDst, []string{"bb"})
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"c"})
 	}
 }
 
@@ -170,9 +170,9 @@ func TestBSONUnorderedCompareArrays(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"arr"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"arr"})
 	}
 
 	// Array with order changed
@@ -185,9 +185,9 @@ func TestBSONUnorderedCompareArrays(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"arr"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"arr"})
 	}
 
 	// Array with extra element
@@ -200,9 +200,9 @@ func TestBSONUnorderedCompareArrays(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"arr"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"arr"})
 	}
 
 	// Array with missing element
@@ -215,9 +215,9 @@ func TestBSONUnorderedCompareArrays(t *testing.T) {
 	result, err = compareDocuments(srcDoc, dstDoc)
 	assert.Nil(t, err)
 	if assert.NotNil(t, result) {
-		assert.Empty(t, result.missingFieldOnSrc)
-		assert.Empty(t, result.missingFieldOnDst)
-		assert.ElementsMatch(t, result.fieldContentsDiffer, []string{"arr"})
+		assert.Empty(t, result.MissingFieldOnSrc)
+		assert.Empty(t, result.MissingFieldOnDst)
+		assert.ElementsMatch(t, result.FieldContentsDiffer, []string{"arr"})
 	}
 
 	// Array with subdocument order changed should match

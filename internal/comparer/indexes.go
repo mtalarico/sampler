@@ -28,11 +28,11 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 		logger.Info().Msg("indexes match.")
 	}
 	for _, each := range comparison.MissingOnSrc {
-		logger.Error().Msgf("%s exists on the source but not the target", each.Name)
+		logger.Error().Msgf("%s is missing on the target", each.Name)
 		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
-		logger.Error().Msgf("%s exists on the target but not the source", each.Name)
+		logger.Error().Msgf("%s is missing on the source", each.Name)
 		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "target")
 	}
 	for _, each := range comparison.Different {

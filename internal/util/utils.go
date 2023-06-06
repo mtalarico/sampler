@@ -15,7 +15,16 @@ func Max(a int, b int) int {
 	}
 }
 
-func Min(a int, b int) int {
+func Max64(a int64, b int64) int64 {
+	switch a > b {
+	case true:
+		return a
+	default:
+		return b
+	}
+}
+
+func Min64(a int64, b int64) int64 {
 	switch a < b {
 	case true:
 		return a

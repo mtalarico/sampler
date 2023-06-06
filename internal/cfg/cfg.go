@@ -9,9 +9,9 @@ import (
 )
 
 type Compare struct {
-	PrintWholeDoc bool
-	Zscore        float64
-	ErrorRate     float64
+	// PrintWholeDoc bool
+	Zscore    float64
+	ErrorRate float64
 }
 
 type MongoOptions struct {
@@ -43,7 +43,7 @@ func Init() Configuration {
 	flag.StringVar(&config.Meta.URI, "metaURI", "", "meta connection string")
 	flag.StringVar(&config.MetaDBName, "metaDBName", "sampler", "meta connection string")
 
-	flag.BoolVar(&config.Compare.PrintWholeDoc, "printWholeDoc", false, fmt.Sprintf("%s\n\t- options: %s", "whether to print whole documents to the log (WARNING: can expose sensitive data)", "true, false (default false)"))
+	// flag.BoolVar(&config.Compare.PrintWholeDoc, "printWholeDoc", false, fmt.Sprintf("%s\n\t- options: %s", "whether to print whole documents to the log (WARNING: can expose sensitive data)", "true, false (default false)"))
 	flag.Float64Var(&config.Compare.Zscore, "zscore", 2.58, "float zscore associated with confidence level (assumes a normal distribution and random sampling)")
 	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "error rate as a float percentage")
 

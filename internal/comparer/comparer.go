@@ -60,8 +60,12 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	if c.config.DryRun {
 		logger.Info().Msg("beginning dry run")
-		c.GetEstimates(ctx, namespace)
-		// c.GetSampleSize(ctx, logger, namespace)
+		srcCount, tgtCount := c.GetEstimates(ctx, namespace)
+		logger.Info().Msgf("source estimate: %d, target estimate: %d", srcCount, tgtCount)
+
+		sampleSize := c.GetSampleSize(ctx, logger, namespace)
+		logger.Info().Msgf("using sample size of %d", sampleSize)
+
 		logger.Info().Msg("finished dry run")
 		return
 	}
@@ -69,8 +73,7 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
-	// c.CompareSampleDocs(ctx, logger, namespace, false)
-	// c.CompareSampleDocs(ctx, logger, namespace, true)
+	c.CompareSampleDocs(ctx, logger, namespace)
 
 	logger.Info().Msg("finished validation")
 }
