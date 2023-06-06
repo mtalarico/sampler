@@ -19,7 +19,7 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 
 	sortedSource := util.SortSpec(wrappedSource)
 	sortedTarget := util.SortSpec(wrappedTarget)
-	comparison := diff.Diff(sortedSource, sortedTarget)
+	comparison := diff.Diff(logger, sortedSource, sortedTarget)
 
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
@@ -28,12 +28,15 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 		logger.Info().Msg("indexes match.")
 	}
 	for _, each := range comparison.MissingOnSrc {
+		logger.Error().Msgf("%s exists on the source but not the target", each.Name)
 		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
+		logger.Error().Msgf("%s exists on the target but not the source", each.Name)
 		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "target")
 	}
 	for _, each := range comparison.Different {
+		logger.Error().Msgf("%s is different between the source and target", each.Source.Name)
 		c.reporter.ReportMismatchIndex(namespace, each.Source.IndexSpecification, each.Target.IndexSpecification)
 	}
 }

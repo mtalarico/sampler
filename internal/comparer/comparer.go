@@ -60,7 +60,7 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	if c.config.DryRun {
 		logger.Info().Msg("beginning dry run")
-		c.GetEstimates(ctx, logger, namespace)
+		c.GetEstimates(ctx, namespace)
 		// c.GetSampleSize(ctx, logger, namespace)
 		logger.Info().Msg("finished dry run")
 		return
