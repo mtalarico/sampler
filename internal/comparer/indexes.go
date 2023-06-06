@@ -12,23 +12,30 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) bool {
+func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	logger = logger.With().Str("c", "index").Logger()
 	source, target := c.getIndexSpecs(ctx, namespace)
 	wrappedSource, wrappedTarget := wrapIndexes(source), wrapIndexes(target)
 
-	// sort first here
 	sortedSource := util.SortSpec(wrappedSource)
 	sortedTarget := util.SortSpec(wrappedTarget)
-	mismatches := diff.Diff(sortedSource, sortedTarget)
-	logger.Debug().Msgf("%s", mismatches.String())
-	if len(mismatches.MissingOnSrc) > 0 || len(mismatches.MissingOnTgt) > 0 || len(mismatches.Different) > 0 {
+	comparison := diff.Diff(sortedSource, sortedTarget)
+
+	logger.Trace().Msgf("%s", comparison.String())
+	if comparison.HasMismatches() {
 		logger.Error().Msg("indexes are not the same.")
-		// c.reporter.ReportMismatchIndexes(namespace, mismatches)
-		return false
+	} else {
+		logger.Info().Msg("indexes match.")
 	}
-	logger.Info().Msg("indexes match.")
-	return true
+	for _, each := range comparison.MissingOnSrc {
+		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "source")
+	}
+	for _, each := range comparison.MissingOnTgt {
+		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "target")
+	}
+	for _, each := range comparison.Different {
+		c.reporter.ReportMismatchIndex(namespace, each.Source.IndexSpecification, each.Target.IndexSpecification)
+	}
 }
 
 func (c *Comparer) getIndexSpecs(ctx context.Context, namespace ns.Namespace) ([]*mongo.IndexSpecification, []*mongo.IndexSpecification) {

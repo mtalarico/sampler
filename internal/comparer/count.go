@@ -7,16 +7,15 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func (c *Comparer) CompareEstimatedCounts(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) bool {
+func (c *Comparer) CompareEstimatedCounts(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	logger = logger.With().Str("c", "count").Logger()
 	source, target := c.GetEstimates(ctx, logger, namespace)
 	if source != target {
 		c.reporter.ReportMismatchCount(namespace, source, target)
 		logger.Warn().Msg("estimated document counts don't match. (NOTE: this could be the result of metadata differences from unclean shutdowns, consider running a more exact countDocuments)")
-		return false
+		return
 	}
 	logger.Info().Msg("estimated document match")
-	return true
 }
 
 func (c *Comparer) GetEstimates(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) (int64, int64) {

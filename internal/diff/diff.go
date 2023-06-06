@@ -26,6 +26,10 @@ type MismatchDetails[T NamedComparable] struct {
 	Equal        []T
 }
 
+func (m MismatchDetails[T]) HasMismatches() bool {
+	return len(m.MissingOnSrc) > 0 || len(m.MissingOnTgt) > 0 || len(m.Different) > 0
+}
+
 func (m MismatchDetails[T]) String() string {
 	var b strings.Builder
 	b.WriteString("{ ")

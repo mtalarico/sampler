@@ -49,7 +49,7 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 		c.processNS(iCtx, iLogger, namespacesToProcess)
 	})
 
-	c.streamNamespaces(ctx, namespacesToProcess)
+	c.streamNamespaces(ctx, logger, namespacesToProcess)
 
 	close(namespacesToProcess)
 	pool.Done()
@@ -67,18 +67,11 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	}
 
 	logger.Debug().Msg("beginning validation")
-	checkCountsResult := c.CompareEstimatedCounts(ctx, logger, namespace)
-	indexCompareResult := c.CompareIndexes(ctx, logger, namespace)
-	// sampleForwardResult := c.CompareSampleDocs(ctx, logger, namespace, false)
-	// sampleReverseResult := c.CompareSampleDocs(ctx, logger, namespace, true)
+	c.CompareEstimatedCounts(ctx, logger, namespace)
+	c.CompareIndexes(ctx, logger, namespace)
+	// c.CompareSampleDocs(ctx, logger, namespace, false)
+	// c.CompareSampleDocs(ctx, logger, namespace, true)
 
-	if checkCountsResult && indexCompareResult { // && sampleForwardResult && sampleReverseResult {
-		logger.Info().Msg("passed all validation checks")
-	} else if !checkCountsResult && indexCompareResult { //&& sampleForwardResult && sampleReverseResult {
-		logger.Warn().Msg("failed estimated count comparison, but passed other validation checks. Consider running countDocuments")
-	} else {
-		logger.Error().Msg("one or more validation checks failed")
-	}
 	logger.Debug().Msg("finished validation")
 }
 

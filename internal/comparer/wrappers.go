@@ -7,23 +7,23 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type collWrapper struct {
+type nsWrapper struct {
 	Name string
 	ns.Namespace
 }
 
-func (c collWrapper) GetName() string {
+func (c nsWrapper) GetName() string {
 	return c.Name
 }
 
-func (c collWrapper) Equal(to interface{}) bool {
-	return bytes.Equal(c.Specification.Options, to.(collWrapper).Specification.Options)
+func (c nsWrapper) Equal(to interface{}) bool {
+	return bytes.Equal(c.Specification.Options, to.(nsWrapper).Specification.Options)
 }
 
-func wrapColls(specs []ns.Namespace) []collWrapper {
-	wrapped := []collWrapper{}
+func wrapColls(specs []ns.Namespace) []nsWrapper {
+	wrapped := []nsWrapper{}
 	for _, each := range specs {
-		wrapped = append(wrapped, collWrapper{each.String(), each})
+		wrapped = append(wrapped, nsWrapper{each.String(), each})
 	}
 	return wrapped
 }

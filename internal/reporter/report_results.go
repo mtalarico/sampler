@@ -61,13 +61,26 @@ func (r *Reporter) Done(ctx context.Context, logger zerolog.Logger) {
 	r.pool.Done()
 }
 
-func (r *Reporter) ReportMissingNamespace(namespace ns.Namespace) {
+func (r *Reporter) ReportMissingNamespace(missing ns.Namespace, loc location) {
 	reason := "missingNamespace"
+	details := bson.D{
+		{"location", loc},
+	}
+	rep := report{
+		namespace: missing,
+		reason:    reason,
+		details:   details,
+	}
+	r.queue <- rep
+}
+
+func (r *Reporter) ReportMismatchNamespace(source ns.Namespace, target ns.Namespace) {
+	reason := "mismatchNamespace"
 	details := bson.D{
 		{"location", Target},
 	}
 	rep := report{
-		namespace: namespace,
+		namespace: source,
 		reason:    reason,
 		details:   details,
 	}
@@ -88,35 +101,7 @@ func (r *Reporter) ReportMismatchCount(namespace ns.Namespace, src int64, target
 	r.queue <- rep
 }
 
-// func (r *Reporter) ReportMismatchIndexes(namespace ns.Namespace, ) {
-// 	for _, each := range details.MissingIndexOnSrc {
-// 		r.reportMissingIndex(namespace, each, Source)
-// 	}
-
-// 	for _, each := range details.MissingIndexOnTgt {
-// 		r.reportMissingIndex(namespace, each, Target)
-// 	}
-
-// 	for _, each := range details.IndexDifferent {
-// 		r.reportDifferentIndex(namespace, each.Source, each.Target)
-// 	}
-// }
-
-// func (r *Reporter) ReportMismatchDoc(namespace ns.Namespace, details bsonutils.DocMismatchDetails) {
-// 	for _, each := range details.MissingFieldOnSrc {
-// 		// r.re(namespace, each, Source)
-// 	}
-
-// 	for _, each := range details.MissingFieldOnDst {
-// 		// r.reportMissingIndex(namespace, each, Target)
-// 	}
-
-// 	for _, each := range details.FieldContentsDiffer {
-// 		// r.reportDifferentIndex(namespace, each.Source, each.Target)
-// 	}
-// }
-
-func (r *Reporter) reportMissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location location) {
+func (r *Reporter) ReportMissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location location) {
 	reason := "missingIndex"
 	details := bson.D{
 		{"location", location},
@@ -130,7 +115,7 @@ func (r *Reporter) reportMissingIndex(namespace ns.Namespace, index *mongo.Index
 	r.queue <- rep
 }
 
-func (r *Reporter) reportDifferentIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
+func (r *Reporter) ReportMismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
 	reason := "diffIndex"
 	details := bson.D{
 		{"source", src},
@@ -143,24 +128,6 @@ func (r *Reporter) reportDifferentIndex(namespace ns.Namespace, src *mongo.Index
 	}
 	r.queue <- rep
 }
-
-// func (r *Reporter) reportMissingDoc(namespace ns.Namespace, doc bson.Raw, location location) {
-// 	reason := "missingDoc"
-// 	details := bson.D{
-// 		{"location", location},
-// 		{"doc", doc},
-// 	}
-// 	r.insertReport(namespace, reason, details)
-// }
-
-// func (r *Reporter) reportDifferentDoc(namespace ns.Namespace, src bson.Raw, target bson.Raw) {
-// 	reason := "diffDoc"
-// 	details := bson.D{
-// 		{"source", src},
-// 		{"target", target},
-// 	}
-// 	r.insertReport(namespace, reason, details)
-// }
 
 func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	template := bson.D{
@@ -189,5 +156,8 @@ func (r *Reporter) metaCollection() *mongo.Collection {
 }
 
 func (r *Reporter) cleanMetaDB() {
-	r.metaClient.Database(r.metaDBName).Drop(context.TODO())
+	err := r.metaClient.Database(r.metaDBName).Drop(context.TODO())
+	if err != nil {
+		log.Error().Err(err).Msg("unable to drop meta collection")
+	}
 }
