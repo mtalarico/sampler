@@ -16,6 +16,7 @@ func (c nsWrapper) GetName() string {
 	return c.Name
 }
 
+// TODO better metadata checking
 func (c nsWrapper) Equal(to interface{}) bool {
 	return bytes.Equal(c.Specification.Options, to.(nsWrapper).Specification.Options)
 }

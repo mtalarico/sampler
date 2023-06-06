@@ -14,7 +14,7 @@ import (
 )
 
 // hard code batch size of 100
-const BATCH_SIZE int = 2
+const BATCH_SIZE int = 100
 const NUM_WORKERS int = 4
 
 // Conducts comparison between one or more namespaces.

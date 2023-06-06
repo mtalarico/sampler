@@ -44,8 +44,8 @@ func Init() Configuration {
 	flag.StringVar(&config.MetaDBName, "metaDBName", "sampler", "meta connection string")
 
 	// flag.BoolVar(&config.Compare.PrintWholeDoc, "printWholeDoc", false, fmt.Sprintf("%s\n\t- options: %s", "whether to print whole documents to the log (WARNING: can expose sensitive data)", "true, false (default false)"))
-	flag.Float64Var(&config.Compare.Zscore, "zscore", 2.58, "float zscore associated with confidence level (assumes a normal distribution and random sampling)")
-	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "error rate as a float percentage")
+	flag.Float64Var(&config.Compare.Zscore, "zscore", 2.58, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* float zscore associated with confidence level (assumes a normal distribution and random sampling)")
+	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* error rate as a float percentage")
 
 	flag.StringVar(&config.Verbosity, "verbosity", "info", fmt.Sprintf("%s\n\t- options: %s", "log level", "'error', 'warn', 'info', 'debug', 'trace'"))
 	flag.StringVar(&config.LogFile, "filePath", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")

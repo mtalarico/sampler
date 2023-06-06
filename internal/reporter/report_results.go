@@ -66,7 +66,7 @@ func (r *Reporter) Done(ctx context.Context, logger zerolog.Logger) {
 func (r *Reporter) ReportMissingNamespace(missing ns.Namespace, loc location) {
 	reason := "missingNamespace"
 	details := bson.D{
-		{"location", loc},
+		{"missingFrom", loc},
 	}
 	rep := report{
 		namespace: missing,
@@ -79,7 +79,8 @@ func (r *Reporter) ReportMissingNamespace(missing ns.Namespace, loc location) {
 func (r *Reporter) ReportMismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	reason := "mismatchNamespace"
 	details := bson.D{
-		{"location", Target},
+		{"source", source.String()},
+		{"target", target.String()},
 	}
 	rep := report{
 		namespace: source,
@@ -106,7 +107,7 @@ func (r *Reporter) ReportMismatchCount(namespace ns.Namespace, src int64, target
 func (r *Reporter) ReportMissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location location) {
 	reason := "missingIndex"
 	details := bson.D{
-		{"location", location},
+		{"missingFrom", location},
 		{"index", index},
 	}
 	rep := report{
@@ -132,17 +133,17 @@ func (r *Reporter) ReportMismatchIndex(namespace ns.Namespace, src *mongo.IndexS
 }
 
 func (r *Reporter) ReportSampleSummary(namespace ns.Namespace, dir string, summary DocSummary) {
-	reason := "docSummary"
+	reason := "collSampleSummary"
 	details := bson.D{
-		{"missingSrc", summary.MissingOnSrc},
-		{"missingTgt", summary.MissingOnTgt},
+		{"docsMissingFromSource", summary.MissingOnSrc},
+		{"docsMissingFromTarget", summary.MissingOnTgt},
 	}
 
 	switch dir {
 	case "src -> tgt":
-		details = append(details, bson.E{"mismatches.srcToTgt", summary.Different})
+		details = append(details, bson.E{"docsWithMismatches.srcToTgt", summary.Different})
 	case "tgt -> src":
-		details = append(details, bson.E{"mismatches.tgtToSrc", summary.Different})
+		details = append(details, bson.E{"docsWithMismatches.tgtToSrc", summary.Different})
 	}
 
 	rep := report{
@@ -192,7 +193,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace.String()).Logger()
-		if rep.reason == "docSummary" {
+		if rep.reason == "collSampleSummary" {
 			r.appendDocSummary(rep, logger)
 		} else {
 			r.insertReport(rep, logger)
