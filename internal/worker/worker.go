@@ -29,7 +29,6 @@ func NewWorkerPool(logger zerolog.Logger, numWorkers int, workerName string, key
 	}
 }
 
-// use ctxkey.Str("workerLogKey") or ctxkey.Str("workerName") in the context to change worker's metadata
 func (p *Pool) Start(process func(context.Context, zerolog.Logger)) {
 	for i := 0; i < p.num; i++ {
 		workerNum := i
