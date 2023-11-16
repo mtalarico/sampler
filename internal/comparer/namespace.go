@@ -10,18 +10,23 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type namespaceMap struct {
+	Source []ns.Namespace
+	Target []ns.Namespace
+}
+
 // streams back namespaces that are equal on both the source and target, reports namespaces that are different or missing
 func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, ret chan ns.Namespace) {
 	logger = logger.With().Str("c", "namespace").Logger()
 
-	source, target := c.getNamespaces(ctx)
+	nsMap := c.getNamespaces(ctx)
 
 	// if len(source) == 0 {
 	// 	logger.Error().Msg("no namespaces found on source, nothing to compare")
 	// 	return
 	// }
 
-	wrappedSource, wrappedTarget := wrapColls(source), wrapColls(target)
+	wrappedSource, wrappedTarget := wrapColls(nsMap.Source), wrapColls(nsMap.Target)
 	sortedSource := util.SortSpec(wrappedSource)
 	sortedTarget := util.SortSpec(wrappedTarget)
 
@@ -55,14 +60,41 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	}
 }
 
-func (c *Comparer) getNamespaces(ctx context.Context) ([]ns.Namespace, []ns.Namespace) {
-	source, err := ns.UserCollections(&c.sourceClient, false, c.config.MetaDBName)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+func (c *Comparer) getNamespaces(ctx context.Context) namespaceMap {
+	if len(*c.config.IncludeNS) > 0 {
+		log.Info().Strs("includeNS", *c.config.IncludeNS).Msg("looking for included namespaces")
+		return c.includedUserNamespaces(ctx, *c.config.IncludeNS)
+	} else {
+		log.Info().Msg("looking for all user namespaces")
+		return c.allUserNamespaces(ctx)
 	}
-	target, err := ns.UserCollections(&c.targetClient, false, c.config.MetaDBName)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+}
+
+func (c *Comparer) includedUserNamespaces(ctx context.Context, included []string) namespaceMap {
+	var source, target []ns.Namespace
+	for _, each := range included {
+		db, coll, err := util.SplitNamespace(each)
+		if err != nil {
+			log.Error().Err(err).Msg("error splitting namespace")
+		}
+		if eachSrc, err := ns.GetOneUserCollections(&c.sourceClient, db, coll); err == nil {
+			source = append(source, eachSrc)
+		}
+		if eachTgt, err := ns.GetOneUserCollections(&c.targetClient, db, coll); err == nil {
+			target = append(target, eachTgt)
+		}
 	}
-	return source, target
+	return namespaceMap{Source: source, Target: target}
+}
+
+func (c *Comparer) allUserNamespaces(ctx context.Context) namespaceMap {
+	source, err := ns.AllUserCollections(&c.sourceClient, false, c.config.MetaDBName)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+	}
+	target, err := ns.AllUserCollections(&c.targetClient, false, c.config.MetaDBName)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+	}
+	return namespaceMap{Source: source, Target: target}
 }

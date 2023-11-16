@@ -1,9 +1,15 @@
 package util
 
 import (
+	"context"
+	"errors"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func Max(a int, b int) int {
@@ -44,6 +50,29 @@ func GetSampleSize(N int64, z float64, eps float64) int64 {
 func CleanPath(path string) string {
 	cleaned, _ := strings.CutSuffix(path, "/")
 	return cleaned
+}
+
+func IsMongos(client *mongo.Client) bool {
+	result := client.Database("admin").RunCommand(context.TODO(), bson.D{{"isdbgrid", 1}})
+	res, err := result.Raw()
+	if err != nil {
+		code := res.Lookup("code").AsInt64()
+		if code == 59 {
+			return false
+		} else {
+			log.Error().Err(err)
+			return false
+		}
+	}
+	return true
+}
+
+func SplitNamespace(ns string) (string, string, error) {
+	split := strings.Split(ns, ".")
+	if len(split) != 2 {
+		return "", "", errors.New("malformed ns format")
+	}
+	return split[0], split[1], nil
 }
 
 type Named interface {

@@ -26,6 +26,7 @@ type Configuration struct {
 	Meta       MongoOptions
 	Compare    Compare
 	MetaDBName string
+	IncludeNS  *[]string
 	Verbosity  string
 	LogFile    string
 	CleanMeta  bool
@@ -55,6 +56,8 @@ func Init() Configuration {
 	flag.StringVar(&config.LogFile, "log", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.DryRun, "dry", false, "reports estimated counts + calculated sample size based on input z and error rate, then exits. Cannot be used in congunction with cleanMeta")
+
+	config.IncludeNS = flag.StringArray("includeNS", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
 
 	flag.Usage = func() {
 		flagSet := flag.CommandLine
