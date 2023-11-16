@@ -185,7 +185,6 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 			}
 			if len(comparison.MissingFieldOnDst) > 0 {
 				logger.Debug().Msgf("%s is missing fields on the target", key)
-
 			}
 			if len(comparison.MissingFieldOnSrc) > 0 {
 				logger.Debug().Msgf("%s is missing fields on the source", key)
@@ -198,6 +197,7 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 		} else {
 			logger.Debug().Msgf("_id %v not found", key)
 			c.reporter.MissingDoc(namespace, a.dir, aDoc)
+			summary.Missing++
 		}
 	}
 	return summary

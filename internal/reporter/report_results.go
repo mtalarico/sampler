@@ -24,7 +24,7 @@ type Reporter struct {
 type report struct {
 	namespace ns.Namespace
 	reason    Reason
-	details   []bson.E
+	details   bson.D
 	direction Direction
 }
 
@@ -71,8 +71,8 @@ func (r *Reporter) MissingNamespace(missing ns.Namespace, loc Location) {
 func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	reason := NS_DIFF
 	details := bson.D{
-		{"source", source.String()},
-		{"target", target.String()},
+		{"src", source.String()},
+		{"dst", target.String()},
 	}
 	rep := report{
 		namespace: source,
@@ -85,8 +85,8 @@ func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 func (r *Reporter) MismatchCount(namespace ns.Namespace, src int64, target int64) {
 	reason := COUNT_DIFF
 	details := bson.D{
-		{"source", src},
-		{"target", target},
+		{"src", src},
+		{"dst", target},
 	}
 	rep := report{
 		namespace: namespace,
@@ -113,8 +113,8 @@ func (r *Reporter) MissingIndex(namespace ns.Namespace, index *mongo.IndexSpecif
 func (r *Reporter) MismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
 	reason := INDEX_DIFF
 	details := bson.D{
-		{"source", src},
-		{"target", target},
+		{"src", src},
+		{"dst", target},
 	}
 	rep := report{
 		namespace: namespace,
@@ -126,16 +126,19 @@ func (r *Reporter) MismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecifi
 
 func (r *Reporter) SampleSummary(namespace ns.Namespace, direction Direction, summary DocSummary) {
 	reason := COLL_SUMMARY
-	details := bson.D{
-		{"docsMissing.src", summary.MissingOnSrc},
-		{"docsMissing.dst", summary.MissingOnTgt},
-	}
+	details := bson.D{}
 
 	switch direction {
-	case SrcToDst:
-		details = append(details, bson.E{"docsWithMismatches.srcToDst", summary.Different})
 	case DstToSrc:
-		details = append(details, bson.E{"docsWithMismatches.dstToSrc", summary.Different})
+		details = append(details, bson.D{
+			bson.E{"docsMissing.src", summary.Missing},
+			bson.E{"docsWithMismatches.DstToTarget", summary.Different},
+		}...)
+	case SrcToDst:
+		details = append(details, bson.D{
+			bson.E{"docsMissing.dst", summary.Missing},
+			bson.E{"docsWithMismatches.srcToDst", summary.Different},
+		}...)
 	}
 
 	rep := report{
@@ -166,10 +169,7 @@ func (r *Reporter) MismatchDoc(namespace ns.Namespace, direction Direction, a, b
 
 func (r *Reporter) MissingDoc(namespace ns.Namespace, direction Direction, doc bson.Raw) {
 	reason := DOC_MISSING
-	details := bson.D{
-		{"doc", doc},
-		{"direction", direction},
-	}
+	details := bson.D{}
 
 	switch direction {
 	case SrcToDst:
@@ -177,6 +177,8 @@ func (r *Reporter) MissingDoc(namespace ns.Namespace, direction Direction, doc b
 	case DstToSrc:
 		details = append(details, bson.E{"missingFrom", Source})
 	}
+
+	details = append(details, bson.E{"doc", doc})
 
 	rep := report{
 		namespace: namespace,
@@ -198,12 +200,13 @@ func (r *Reporter) appendDocSummary(rep report, logger zerolog.Logger) {
 		{"$inc", rep.details},
 	}
 
-	extJson, _ := bson.MarshalExtJSON(filter, false, false)
-	logger.Debug().Msgf("inserting report -- %s", extJson)
+	filterExtJson, _ := bson.MarshalExtJSON(filter, false, false)
+	updateExtJson, _ := bson.MarshalExtJSON(update, false, false)
+	logger.Debug().Msgf("appending summary -- {filter: %s, update: %s}", filterExtJson, updateExtJson)
 	opts := options.Update().SetUpsert(true)
 	_, err := r.getCollection(rep.reason).UpdateOne(context.TODO(), filter, update, opts)
 	if err != nil {
-		logger.Error().Err(err).Msgf("unable to append to doc summary -- %s", extJson)
+		logger.Error().Err(err).Msgf("unable to append to doc summary  -- {filter: %s, update: %s}", filterExtJson, updateExtJson)
 	}
 }
 
