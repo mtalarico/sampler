@@ -12,6 +12,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type Pair[T any] struct {
+	Source T
+	Target T
+}
+
 func Max(a int, b int) int {
 	switch a > b {
 	case true:

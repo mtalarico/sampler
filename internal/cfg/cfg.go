@@ -57,7 +57,7 @@ func Init() Configuration {
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.DryRun, "dry", false, "reports estimated counts + calculated sample size based on input z and error rate, then exits. Cannot be used in congunction with cleanMeta")
 
-	config.IncludeNS = flag.StringArray("includeNS", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
+	config.IncludeNS = flag.StringArray("ns", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
 
 	flag.Usage = func() {
 		flagSet := flag.CommandLine

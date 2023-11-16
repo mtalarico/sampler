@@ -8,7 +8,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"sampler/internal/doc"
-	"sampler/internal/ns"
 	"sampler/internal/reporter"
 	"sampler/internal/util"
 	"sampler/internal/worker"
@@ -30,7 +29,7 @@ func (b batch) add(doc bson.Raw) {
 	b[id] = doc
 }
 
-func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
+func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	logger = logger.With().Str("c", "sampleDoc").Logger()
 	source, target := c.sampleCursors(ctx, logger, namespace)
 	if c.config.DryRun {
@@ -55,7 +54,7 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	logger.Info().Msg("finished document sample")
 }
 
-func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) int64 {
+func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace namespacePair) int64 {
 	if c.config.Compare.ForceSampleSize > 0 {
 		return c.config.Compare.ForceSampleSize
 	}
@@ -71,7 +70,7 @@ func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, nam
 	return sampleSize
 }
 
-func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) (*mongo.Cursor, *mongo.Cursor) {
+func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, namespace namespacePair) (*mongo.Cursor, *mongo.Cursor) {
 	sampleSize := c.GetSampleSize(ctx, logger, namespace)
 	logger.Info().Msgf("using sample size of %d", sampleSize)
 	if c.config.DryRun {
@@ -82,11 +81,11 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
 	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
 
-	srcCursor, err := c.sourceCollection(namespace).Aggregate(context.TODO(), pipeline, opts)
+	srcCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(context.TODO(), pipeline, opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
-	tgtCursor, err := c.targetCollection(namespace).Aggregate(context.TODO(), pipeline, opts)
+	tgtCursor, err := c.targetCollection(namespace.Db, namespace.Collection).Aggregate(context.TODO(), pipeline, opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
@@ -128,12 +127,24 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 	}
 }
 
-func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, toFind documentBatch) documentBatch {
+func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace namespacePair, toFind documentBatch) documentBatch {
+	// TODO, turn to bulk ops, fix sharded
 	buffer := make(batch, BATCH_SIZE)
-	var keys []bson.RawValue
+	var keys []bson.D
 
 	for _, value := range toFind.batch {
-		keys = append(keys, value.Lookup("_id"))
+		key := bson.D{}
+		if namespace.Partitioned {
+			elems, err := namespace.PartitionKey.Elements()
+			if err != nil {
+				log.Error().Err(err)
+			}
+			for _, each := range elems {
+				key = append(key, bson.E{each.Key(), value.Lookup(each.Key())})
+			}
+		}
+		key = append(key, bson.E{"_id", value.Lookup("_id")})
+		keys = append(keys, key)
 	}
 	filter := bson.M{"_id": bson.M{"$in": keys}}
 
@@ -145,9 +156,9 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 
 	switch toFind.dir {
 	case reporter.SrcToDst:
-		cursor, err = c.targetCollection(namespace).Find(context.TODO(), filter, opts)
+		cursor, err = c.targetCollection(namespace.Db, namespace.Collection).Find(context.TODO(), filter, opts)
 	case reporter.DstToSrc:
-		cursor, err = c.sourceCollection(namespace).Find(context.TODO(), filter, opts)
+		cursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Find(context.TODO(), filter, opts)
 	default:
 		logger.Fatal().Msg("invalid comparison direction")
 	}
@@ -170,7 +181,7 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	}
 }
 
-func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, a documentBatch, b documentBatch) reporter.DocSummary {
+func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace namespacePair, a documentBatch, b documentBatch) reporter.DocSummary {
 	var summary reporter.DocSummary
 	for key, aDoc := range a.batch {
 		if bDoc, ok := b.batch[key]; ok {
@@ -192,25 +203,25 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 			if len(comparison.FieldContentsDiffer) > 0 {
 				logger.Debug().Msgf("%s is different between the source and target", key)
 			}
-			c.reporter.MismatchDoc(namespace, a.dir, aDoc, bDoc)
+			c.reporter.MismatchDoc(namespace.String(), a.dir, aDoc, bDoc)
 			summary.Different++
 		} else {
 			logger.Debug().Msgf("_id %v not found", key)
-			c.reporter.MissingDoc(namespace, a.dir, aDoc)
+			c.reporter.MissingDoc(namespace.String(), a.dir, aDoc)
 			summary.Missing++
 		}
 	}
 	return summary
 }
 
-func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, jobs chan documentBatch) {
+func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair, jobs chan documentBatch) {
 	for processing := range jobs {
 		logger = logger.With().Str("dir", string(processing.dir)).Logger()
 		lookedUp := c.batchFind(ctx, logger, namespace, processing)
 		summary := c.batchCompare(ctx, logger, namespace, processing, lookedUp)
 		if summary.HasMismatches() {
 			logger.Error().Msg("mismatch in batch")
-			c.reporter.SampleSummary(namespace, processing.dir, summary)
+			c.reporter.SampleSummary(namespace.String(), processing.dir, summary)
 		}
 	}
 

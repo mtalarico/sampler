@@ -2,7 +2,6 @@ package reporter
 
 import (
 	"context"
-	"sampler/internal/ns"
 	"sampler/internal/worker"
 	"time"
 
@@ -22,7 +21,7 @@ type Reporter struct {
 }
 
 type report struct {
-	namespace ns.Namespace
+	namespace string
 	reason    Reason
 	details   bson.D
 	direction Direction
@@ -55,7 +54,7 @@ func (r *Reporter) Done(ctx context.Context, logger zerolog.Logger) {
 	r.pool.Done()
 }
 
-func (r *Reporter) MissingNamespace(missing ns.Namespace, loc Location) {
+func (r *Reporter) MissingNamespace(missing string, loc Location) {
 	reason := NS_MISSING
 	details := bson.D{
 		{"missingFrom", loc},
@@ -68,11 +67,11 @@ func (r *Reporter) MissingNamespace(missing ns.Namespace, loc Location) {
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
+func (r *Reporter) MismatchNamespace(source string, target string) {
 	reason := NS_DIFF
 	details := bson.D{
-		{"src", source.String()},
-		{"dst", target.String()},
+		{"src", source},
+		{"dst", target},
 	}
 	rep := report{
 		namespace: source,
@@ -82,7 +81,7 @@ func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchCount(namespace ns.Namespace, src int64, target int64) {
+func (r *Reporter) MismatchCount(namespace string, src int64, target int64) {
 	reason := COUNT_DIFF
 	details := bson.D{
 		{"src", src},
@@ -96,7 +95,7 @@ func (r *Reporter) MismatchCount(namespace ns.Namespace, src int64, target int64
 	r.queue <- rep
 }
 
-func (r *Reporter) MissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location Location) {
+func (r *Reporter) MissingIndex(namespace string, index *mongo.IndexSpecification, location Location) {
 	reason := INDEX_MISSING
 	details := bson.D{
 		{"missingFrom", location},
@@ -110,7 +109,7 @@ func (r *Reporter) MissingIndex(namespace ns.Namespace, index *mongo.IndexSpecif
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
+func (r *Reporter) MismatchIndex(namespace string, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
 	reason := INDEX_DIFF
 	details := bson.D{
 		{"src", src},
@@ -124,7 +123,7 @@ func (r *Reporter) MismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecifi
 	r.queue <- rep
 }
 
-func (r *Reporter) SampleSummary(namespace ns.Namespace, direction Direction, summary DocSummary) {
+func (r *Reporter) SampleSummary(namespace string, direction Direction, summary DocSummary) {
 	reason := COLL_SUMMARY
 	details := bson.D{}
 
@@ -150,7 +149,7 @@ func (r *Reporter) SampleSummary(namespace ns.Namespace, direction Direction, su
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchDoc(namespace ns.Namespace, direction Direction, a, b bson.Raw) {
+func (r *Reporter) MismatchDoc(namespace string, direction Direction, a, b bson.Raw) {
 	reason := DOC_DIFF
 	details := bson.D{
 		{"srcDoc", a},
@@ -167,7 +166,7 @@ func (r *Reporter) MismatchDoc(namespace ns.Namespace, direction Direction, a, b
 	r.queue <- rep
 }
 
-func (r *Reporter) MissingDoc(namespace ns.Namespace, direction Direction, doc bson.Raw) {
+func (r *Reporter) MissingDoc(namespace string, direction Direction, doc bson.Raw) {
 	reason := DOC_MISSING
 	details := bson.D{}
 
@@ -193,7 +192,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	filter := bson.D{
 		{"reason", rep.reason},
 		{"run", r.startTime},
-		{"ns", rep.namespace.String()},
+		{"ns", rep.namespace},
 	}
 
 	var update bson.D
@@ -253,7 +252,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
-		logger = logger.With().Str("ns", rep.namespace.String()).Logger()
+		logger = logger.With().Str("ns", rep.namespace).Logger()
 		// if rep.reason == COLL_SUMMARY {
 		// 	r.appendDocSummary(rep, logger)
 		// } else {

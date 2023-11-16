@@ -3,7 +3,6 @@ package comparer
 import (
 	"context"
 	"sampler/internal/cfg"
-	"sampler/internal/ns"
 	"sampler/internal/reporter"
 	"sampler/internal/worker"
 	"time"
@@ -41,7 +40,7 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 }
 
 func (c *Comparer) CompareAll(ctx context.Context) {
-	namespacesToProcess := make(chan ns.Namespace)
+	namespacesToProcess := make(chan namespacePair)
 	logger := log.With().Logger()
 
 	if c.config.DryRun {
@@ -60,8 +59,8 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 	c.reporter.Done(ctx, logger)
 }
 
-// Preforms comparison on a single namespace
-func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
+// Preforms comparison on a single namespace-pair
+func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
@@ -69,7 +68,7 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	logger.Info().Msg("finished validation")
 }
 
-func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs chan ns.Namespace) {
+func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs chan namespacePair) {
 	for namespace := range jobs {
 		logger = logger.With().Str("ns", namespace.String()).Logger()
 		c.CompareNs(ctx, logger, namespace)
@@ -77,11 +76,11 @@ func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs ch
 }
 
 // return a handle to the source collection for a namespace
-func (c *Comparer) sourceCollection(namespace ns.Namespace) *mongo.Collection {
-	return c.sourceClient.Database(namespace.Db).Collection(namespace.Collection)
+func (c *Comparer) sourceCollection(db string, coll string) *mongo.Collection {
+	return c.sourceClient.Database(db).Collection(coll)
 }
 
 // return a handle to the target collection for a namespace
-func (c *Comparer) targetCollection(namespace ns.Namespace) *mongo.Collection {
-	return c.targetClient.Database(namespace.Db).Collection(namespace.Collection)
+func (c *Comparer) targetCollection(db string, coll string) *mongo.Collection {
+	return c.targetClient.Database(db).Collection(coll)
 }

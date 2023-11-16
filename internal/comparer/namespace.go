@@ -5,10 +5,37 @@ import (
 	"sampler/internal/diff"
 	"sampler/internal/ns"
 	"sampler/internal/util"
+	"strconv"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type namespacePair struct {
+	Db            string
+	Collection    string
+	Partitioned   util.Pair[bool]
+	PartitionKey  util.Pair[bson.Raw]
+	Specification *mongo.CollectionSpecification
+}
+
+func (ns namespacePair) String() string {
+	return ns.Db + "." + ns.Collection
+}
+
+func (ns namespacePair) Debug() string {
+	base := "{ name: " + ns.Db + "." + ns.Collection + ", src: { partioned: " + strconv.FormatBool(ns.Partitioned.Source)
+	if ns.Partitioned.Source {
+		base += ", key: " + ns.PartitionKey.Source.String()
+	}
+	base += " }, dst: { partitioned: " + strconv.FormatBool(ns.Partitioned.Target)
+	if ns.Partitioned.Target {
+		base += ", key: " + ns.PartitionKey.Target.String()
+	}
+	return base + " }"
+}
 
 type namespaceMap struct {
 	Source []ns.Namespace
@@ -16,7 +43,7 @@ type namespaceMap struct {
 }
 
 // streams back namespaces that are equal on both the source and target, reports namespaces that are different or missing
-func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, ret chan ns.Namespace) {
+func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, ret chan namespacePair) {
 	logger = logger.With().Str("c", "namespace").Logger()
 
 	nsMap := c.getNamespaces(ctx)
@@ -35,29 +62,49 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	if comparison.HasMismatches() {
 		logger.Warn().Msg("there are namespace mismatches between source and destination")
 		logger.Debug().Msgf("%s", comparison.String())
-
 	}
 	for _, each := range comparison.Equal {
-		logger.Trace().Msgf("putting ns %s on channel", each.Namespace)
-		ret <- each.Namespace
+		c.pushToChannel(logger, each.Namespace, ret)
 	}
 	if c.config.DryRun {
 		return
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
-		c.reporter.MissingNamespace(each.Namespace, "source")
+		c.reporter.MissingNamespace(each.Namespace.String(), "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
 		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the target", each.Namespace.String())
-		c.reporter.MissingNamespace(each.Namespace, "target")
+		c.reporter.MissingNamespace(each.Namespace.String(), "target")
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Str("ns", each.Source.Namespace.String()).Msgf("%s different between the source and target", each.Source.String())
-		c.reporter.MismatchNamespace(each.Source.Namespace, each.Target.Namespace)
+		c.reporter.MismatchNamespace(each.Source.Namespace.String(), each.Target.Namespace.String())
 		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
-		ret <- each.Source.Namespace
+		c.pushToChannel(logger, each.Source.Namespace, ret)
 	}
+}
+
+func (c *Comparer) pushToChannel(logger zerolog.Logger, namespace ns.Namespace, ret chan namespacePair) {
+	sourceSharded, sourceKey := ns.CheckSharded(&c.sourceClient, namespace.Db, namespace.Collection)
+	targetSharded, targetKey := ns.CheckSharded(&c.targetClient, namespace.Db, namespace.Collection)
+
+	pair := namespacePair{
+		Db:            namespace.Db,
+		Collection:    namespace.Collection,
+		Specification: namespace.Specification,
+		Partitioned: util.Pair[bool]{
+			Source: sourceSharded,
+			Target: targetSharded,
+		},
+		PartitionKey: util.Pair[bson.Raw]{
+			Source: sourceKey,
+			Target: targetKey,
+		},
+	}
+
+	logger.Trace().Msgf("putting ns-pair %s on channel", pair.Debug())
+	ret <- pair
 }
 
 func (c *Comparer) getNamespaces(ctx context.Context) namespaceMap {

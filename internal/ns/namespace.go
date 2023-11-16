@@ -16,8 +16,6 @@ import (
 type Namespace struct {
 	Db            string
 	Collection    string
-	Partitioned   bool
-	PartitionKey  bson.Raw
 	Specification *mongo.CollectionSpecification
 }
 
@@ -41,7 +39,8 @@ func GetOneUserCollections(client *mongo.Client, dbName string, collName string)
 		return Namespace{}, err
 	}
 	if len(specifications) == 1 {
-		return checkShardAndMakeNS(client, dbName, specifications[0]), nil
+		spec := specifications[0]
+		return Namespace{Db: dbName, Collection: spec.Name, Specification: spec}, nil
 	}
 	return Namespace{}, errors.New("no collection found")
 }
@@ -72,22 +71,20 @@ func AllUserCollections(client *mongo.Client, includeViews bool, additionalExclu
 		}
 		for _, spec := range specifications {
 			log.Trace().Msgf("found coll spec %v", spec)
-			ns := checkShardAndMakeNS(client, dbName, spec)
+			ns := Namespace{Db: dbName, Collection: spec.Name, Specification: spec}
 			namespaces = append(namespaces, ns)
 		}
 	}
 	return namespaces, nil
 }
 
-func checkShardAndMakeNS(client *mongo.Client, dbName string, spec *mongo.CollectionSpecification) Namespace {
-	ns := Namespace{Db: dbName, Collection: spec.Name, Specification: spec}
+func CheckSharded(client *mongo.Client, dbName string, collName string) (bool, bson.Raw) {
 	if util.IsMongos(client) {
-		filter := bson.D{{"_id", dbName + "." + spec.Name}}
+		filter := bson.D{{"_id", dbName + "." + collName}}
 		res := client.Database("config").Collection("collections").FindOne(context.TODO(), filter, nil)
 		if raw, err := res.Raw(); err == nil {
-			ns.Partitioned = true
-			ns.PartitionKey = raw.Lookup("key").Document()
+			return true, raw.Lookup("key").Document()
 		}
 	}
-	return ns
+	return false, nil
 }

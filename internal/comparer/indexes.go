@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"sampler/internal/diff"
-	"sampler/internal/ns"
 	"sampler/internal/util"
 
 	"github.com/rs/zerolog"
@@ -12,7 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
+func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	if c.config.DryRun {
 		return
 	}
@@ -32,25 +31,25 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Msgf("%s is missing on the target", each.Name)
-		c.reporter.MissingIndex(namespace, each.IndexSpecification, "source")
+		c.reporter.MissingIndex(namespace.String(), each.IndexSpecification, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
 		logger.Error().Msgf("%s is missing on the source", each.Name)
-		c.reporter.MissingIndex(namespace, each.IndexSpecification, "target")
+		c.reporter.MissingIndex(namespace.String(), each.IndexSpecification, "target")
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Msgf("%s is different between the source and target", each.Source.Name)
-		c.reporter.MismatchIndex(namespace, each.Source.IndexSpecification, each.Target.IndexSpecification)
+		c.reporter.MismatchIndex(namespace.String(), each.Source.IndexSpecification, each.Target.IndexSpecification)
 	}
 }
 
-func (c *Comparer) getIndexSpecs(ctx context.Context, namespace ns.Namespace) ([]*mongo.IndexSpecification, []*mongo.IndexSpecification) {
-	sourceSpecs, err := c.sourceCollection(namespace).Indexes().ListSpecifications(ctx, nil)
+func (c *Comparer) getIndexSpecs(ctx context.Context, namespace namespacePair) ([]*mongo.IndexSpecification, []*mongo.IndexSpecification) {
+	sourceSpecs, err := c.sourceCollection(namespace.Db, namespace.Collection).Indexes().ListSpecifications(ctx, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	targetSpecs, err := c.targetCollection(namespace).Indexes().ListSpecifications(ctx, nil)
+	targetSpecs, err := c.targetCollection(namespace.Db, namespace.Collection).Indexes().ListSpecifications(ctx, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
