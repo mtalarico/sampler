@@ -16,14 +16,10 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 
 	source, target := c.getNamespaces(ctx)
 
-	if len(source) == 0 {
-		logger.Error().Msg("no namespaces found on source, nothing to compare")
-		return
-	}
-	if len(target) == 0 {
-		logger.Error().Msg("no namespaces found on target, nothing to compare")
-		return
-	}
+	// if len(source) == 0 {
+	// 	logger.Error().Msg("no namespaces found on source, nothing to compare")
+	// 	return
+	// }
 
 	wrappedSource, wrappedTarget := wrapColls(source), wrapColls(target)
 	sortedSource := util.SortSpec(wrappedSource)
@@ -32,16 +28,23 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	comparison := diff.Diff(logger, sortedSource, sortedTarget)
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
-		logger.Error().Msg("there are namespace mismatches between source and destination")
+		logger.Warn().Msg("there are namespace mismatches between source and destination")
 		logger.Debug().Msgf("%s", comparison.String())
 
 	}
+	for _, each := range comparison.Equal {
+		logger.Trace().Msgf("putting ns %s on channel", each.Namespace)
+		ret <- each.Namespace
+	}
+	if c.config.DryRun {
+		return
+	}
 	for _, each := range comparison.MissingOnSrc {
-		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the target", each.Namespace.String())
+		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
 		c.reporter.ReportMissingNamespace(each.Namespace, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
-		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
+		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the target", each.Namespace.String())
 		c.reporter.ReportMissingNamespace(each.Namespace, "target")
 	}
 	for _, each := range comparison.Different {
@@ -50,11 +53,6 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
 		ret <- each.Source.Namespace
 	}
-	for _, each := range comparison.Equal {
-		logger.Trace().Msgf("putting ns %s on channel", each.Namespace)
-		ret <- each.Namespace
-	}
-
 }
 
 func (c *Comparer) getNamespaces(ctx context.Context) ([]ns.Namespace, []ns.Namespace) {

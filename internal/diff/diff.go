@@ -71,9 +71,23 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 
 	srcLen := len(source)
 	tgtLen := len(target)
-	if srcLen == 0 || tgtLen == 0 {
-		// we have pre-checked namespaces existence, should at least have _id
-		logger.Fatal().Msg("something is wrong")
+	if srcLen == 0 {
+		missingOnSrc = append(missingOnSrc, target...)
+		return MismatchDetails[T]{
+			MissingOnSrc: missingOnSrc,
+			MissingOnTgt: missingOnTgt,
+			Different:    different,
+			Equal:        equal,
+		}
+	}
+	if tgtLen == 0 {
+		missingOnTgt = append(missingOnTgt, source...)
+		return MismatchDetails[T]{
+			MissingOnSrc: missingOnSrc,
+			MissingOnTgt: missingOnTgt,
+			Different:    different,
+			Equal:        equal,
+		}
 	}
 	maxLen := util.Max(srcLen, tgtLen)
 	logger.Debug().Msgf("source count: %d, target count: %d", srcLen, tgtLen)

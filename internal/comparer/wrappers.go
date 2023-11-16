@@ -7,6 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+/// Wraps a namespace into a format that meets the Named trait -- used for sorting specifications (NS or Index)
+
 type nsWrapper struct {
 	Name string
 	ns.Namespace
@@ -28,6 +30,8 @@ func wrapColls(specs []ns.Namespace) []nsWrapper {
 	}
 	return wrapped
 }
+
+/// Wraps an index specification into a format that meets the Named trait -- used for sorting specifications (NS or Index)
 
 type indexWrapper struct {
 	Name string

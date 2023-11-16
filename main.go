@@ -24,19 +24,24 @@ func connectMongo(config cfg.Configuration) (*mongo.Client, *mongo.Client, *mong
 	sourceConfig := config.Source.MakeClientOptions()
 	source, err := mongo.Connect(context.TODO(), sourceConfig)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		log.Fatal().Err(err).Msg("cannot connect to source cluster")
 	}
 
 	targetConfig := config.Target.MakeClientOptions()
 	target, err := mongo.Connect(context.TODO(), targetConfig)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		log.Fatal().Err(err).Msg("cannot connect to destination cluster")
 	}
 
-	metaConfig := config.Meta.MakeClientOptions()
-	meta, err := mongo.Connect(context.TODO(), metaConfig)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+	var meta *mongo.Client
+	if config.Meta.URI != "" {
+		metaConfig := config.Meta.MakeClientOptions()
+		meta, err = mongo.Connect(context.TODO(), metaConfig)
+		if err != nil {
+			log.Fatal().Err(err).Msg("cannot connect to metadata cluster")
+		}
+	} else {
+		meta = target
 	}
 
 	return source, target, meta

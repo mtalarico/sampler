@@ -46,16 +46,3 @@ func (p *Pool) Start(process func(context.Context, zerolog.Logger)) {
 func (p *Pool) Done() {
 	p.wg.Wait()
 }
-
-// func wait(ctx context.Context, wg *sync.WaitGroup) <-chan struct{} {
-// 	done := make(chan struct{})
-// 	go func() {
-// 		log.Trace().Msgf("waiting for %s", ctx.Value(ctxkey.Str("workerName")))
-
-// 		wg.Wait()
-// 		log.Trace().Msgf("all channels for %s done", ctx.Value(ctxkey.Str("workerName")))
-
-// 		done <- struct{}{}
-// 	}()
-// 	return done
-// }

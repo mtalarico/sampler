@@ -44,6 +44,10 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 	namespacesToProcess := make(chan ns.Namespace)
 	logger := log.With().Logger()
 
+	if c.config.DryRun {
+		logger.Info().Msg("** dry run **")
+	}
+
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "namespaceWorkers")
 	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
 		c.processNS(iCtx, iLogger, namespacesToProcess)
@@ -58,23 +62,10 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 
 // Preforms comparison on a single namespace
 func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
-	if c.config.DryRun {
-		logger.Info().Msg("beginning dry run")
-		srcCount, tgtCount := c.GetEstimates(ctx, namespace)
-		logger.Info().Msgf("source estimate: %d, target estimate: %d", srcCount, tgtCount)
-
-		sampleSize := c.GetSampleSize(ctx, logger, namespace)
-		logger.Info().Msgf("using sample size of %d", sampleSize)
-
-		logger.Info().Msg("finished dry run")
-		return
-	}
-
 	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
 	c.CompareSampleDocs(ctx, logger, namespace)
-
 	logger.Info().Msg("finished validation")
 }
 

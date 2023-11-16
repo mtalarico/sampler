@@ -44,6 +44,9 @@ func (b batch) add(doc bson.Raw) {
 func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
 	logger = logger.With().Str("c", "sampleDoc").Logger()
 	source, target := c.sampleCursors(ctx, logger, namespace)
+	if c.config.DryRun {
+		return
+	}
 	defer source.Close(ctx)
 	defer target.Close(ctx)
 	// TODO variable batch size based on doc size ( 256MB)
@@ -64,6 +67,9 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 }
 
 func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) int64 {
+	if c.config.Compare.ForceSampleSize > 0 {
+		return c.config.Compare.ForceSampleSize
+	}
 	source, target := c.GetEstimates(ctx, namespace)
 	// we warn about estimated counts, but they are not guarenteed to be equal, so sample from the larger of both collections
 	max := util.Max64(source, target)
@@ -79,6 +85,9 @@ func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, nam
 func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) (*mongo.Cursor, *mongo.Cursor) {
 	sampleSize := c.GetSampleSize(ctx, logger, namespace)
 	logger.Info().Msgf("using sample size of %d", sampleSize)
+	if c.config.DryRun {
+		return nil, nil
+	}
 
 	pipeline := bson.A{bson.D{{"$sample", bson.D{{"size", sampleSize}}}}, bson.D{{"$sort", bson.D{{"_id", 1}}}}}
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
@@ -214,7 +223,7 @@ func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, names
 		lookedUp := c.batchFind(ctx, logger, namespace, processing)
 		summary := c.batchCompare(ctx, logger, namespace, processing, lookedUp)
 		if summary.HasMismatches() {
-			logger.Error().Msg("docs are not the same.")
+			logger.Error().Msg("mismatch in batch")
 			c.reporter.ReportSampleSummary(namespace, processing.dir.String(), summary)
 		}
 	}

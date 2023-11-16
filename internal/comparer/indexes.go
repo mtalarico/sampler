@@ -13,6 +13,9 @@ import (
 )
 
 func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace) {
+	if c.config.DryRun {
+		return
+	}
 	logger = logger.With().Str("c", "index").Logger()
 	source, target := c.getIndexSpecs(ctx, namespace)
 	wrappedSource, wrappedTarget := wrapIndexes(source), wrapIndexes(target)
