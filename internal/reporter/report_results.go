@@ -153,8 +153,8 @@ func (r *Reporter) SampleSummary(namespace ns.Namespace, direction Direction, su
 func (r *Reporter) MismatchDoc(namespace ns.Namespace, direction Direction, a, b bson.Raw) {
 	reason := DOC_DIFF
 	details := bson.D{
-		{"src", a},
-		{"dst", b},
+		{"srcDoc", a},
+		{"dstDoc", b},
 		{"direction", direction},
 	}
 
@@ -189,19 +189,45 @@ func (r *Reporter) MissingDoc(namespace ns.Namespace, direction Direction, doc b
 	r.queue <- rep
 }
 
-func (r *Reporter) appendDocSummary(rep report, logger zerolog.Logger) {
+func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	filter := bson.D{
 		{"reason", rep.reason},
 		{"run", r.startTime},
 		{"ns", rep.namespace.String()},
 	}
 
-	update := bson.D{
-		{"$inc", rep.details},
+	var update bson.D
+	switch rep.reason {
+
+	case COLL_SUMMARY:
+		update = bson.D{
+			{"$inc", rep.details},
+		}
+	case DOC_DIFF, DOC_MISSING:
+		var doc bson.Raw
+		doc, err := bson.Marshal(rep.details)
+		if err != nil {
+			log.Error().Err(err).Msg("cannot marshal doc to bson.Raw")
+		}
+		var path string
+		if rep.reason == DOC_DIFF {
+			path = "srcDoc"
+		} else {
+			path = "doc"
+		}
+		key := doc.Lookup(path).Document().Lookup("_id")
+		filter = append(filter, bson.E{"key", key})
+		update = bson.D{
+			{"$set", rep.details},
+		}
+	default:
+		update = bson.D{
+			{"$set", rep.details},
+		}
 	}
 
-	filterExtJson, _ := bson.MarshalExtJSON(filter, false, false)
-	updateExtJson, _ := bson.MarshalExtJSON(update, false, false)
+	filterExtJson, _ := bson.MarshalExtJSON(filter, false, true)
+	updateExtJson, _ := bson.MarshalExtJSON(update, false, true)
 	logger.Debug().Msgf("appending summary -- {filter: %s, update: %s}", filterExtJson, updateExtJson)
 	opts := options.Update().SetUpsert(true)
 	_, err := r.getCollection(rep.reason).UpdateOne(context.TODO(), filter, update, opts)
@@ -210,29 +236,29 @@ func (r *Reporter) appendDocSummary(rep report, logger zerolog.Logger) {
 	}
 }
 
-func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
-	template := bson.D{
-		{"reason", rep.reason},
-		{"run", r.startTime},
-		{"ns", rep.namespace.String()},
-	}
-	report := append(template, rep.details...)
-	extJson, _ := bson.MarshalExtJSON(report, false, false)
-	logger.Debug().Msgf("inserting report -- %s", extJson)
-	_, err := r.getCollection(rep.reason).InsertOne(context.TODO(), report)
-	if err != nil {
-		logger.Error().Err(err).Msgf("unable to insert report -- %s", extJson)
-	}
-}
+// func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
+// 	template := bson.D{
+// 		{"reason", rep.reason},
+// 		{"run", r.startTime},
+// 		{"ns", rep.namespace.String()},
+// 	}
+// 	report := append(template, rep.details...)
+// 	extJson, _ := bson.MarshalExtJSON(report, false, false)
+// 	logger.Debug().Msgf("upserting report -- %s", extJson)
+// 	_, err := r.getCollection(rep.reason).InsertOne(context.TODO(), report)
+// 	if err != nil {
+// 		logger.Error().Err(err).Msgf("unable to insert report -- %s", extJson)
+// 	}
+// }
 
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace.String()).Logger()
-		if rep.reason == COLL_SUMMARY {
-			r.appendDocSummary(rep, logger)
-		} else {
-			r.insertReport(rep, logger)
-		}
+		// if rep.reason == COLL_SUMMARY {
+		// 	r.appendDocSummary(rep, logger)
+		// } else {
+		r.insertReport(rep, logger)
+		// }
 	}
 }
 
