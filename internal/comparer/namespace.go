@@ -41,15 +41,15 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
-		c.reporter.ReportMissingNamespace(each.Namespace, "source")
+		c.reporter.MissingNamespace(each.Namespace, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
 		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the target", each.Namespace.String())
-		c.reporter.ReportMissingNamespace(each.Namespace, "target")
+		c.reporter.MissingNamespace(each.Namespace, "target")
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Str("ns", each.Source.Namespace.String()).Msgf("%s different between the source and target", each.Source.String())
-		c.reporter.ReportMismatchNamespace(each.Source.Namespace, each.Target.Namespace)
+		c.reporter.MismatchNamespace(each.Source.Namespace, each.Target.Namespace)
 		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
 		ret <- each.Source.Namespace
 	}

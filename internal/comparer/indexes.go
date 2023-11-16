@@ -32,15 +32,15 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Msgf("%s is missing on the target", each.Name)
-		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "source")
+		c.reporter.MissingIndex(namespace, each.IndexSpecification, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
 		logger.Error().Msgf("%s is missing on the source", each.Name)
-		c.reporter.ReportMissingIndex(namespace, each.IndexSpecification, "target")
+		c.reporter.MissingIndex(namespace, each.IndexSpecification, "target")
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Msgf("%s is different between the source and target", each.Source.Name)
-		c.reporter.ReportMismatchIndex(namespace, each.Source.IndexSpecification, each.Target.IndexSpecification)
+		c.reporter.MismatchIndex(namespace, each.Source.IndexSpecification, each.Target.IndexSpecification)
 	}
 }
 

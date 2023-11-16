@@ -13,14 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type location string
-
-const (
-	Source        location = "source"
-	Target        location = "target"
-	NUM_REPORTERS          = 1
-)
-
 type Reporter struct {
 	metaClient mongo.Client
 	metaDBName string
@@ -31,9 +23,9 @@ type Reporter struct {
 
 type report struct {
 	namespace ns.Namespace
-	reason    string
+	reason    Reason
 	details   []bson.E
-	direction string
+	direction Direction
 }
 
 func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.Time) Reporter {
@@ -63,8 +55,8 @@ func (r *Reporter) Done(ctx context.Context, logger zerolog.Logger) {
 	r.pool.Done()
 }
 
-func (r *Reporter) ReportMissingNamespace(missing ns.Namespace, loc location) {
-	reason := "missingNamespace"
+func (r *Reporter) MissingNamespace(missing ns.Namespace, loc Location) {
+	reason := NS_MISSING
 	details := bson.D{
 		{"missingFrom", loc},
 	}
@@ -76,8 +68,8 @@ func (r *Reporter) ReportMissingNamespace(missing ns.Namespace, loc location) {
 	r.queue <- rep
 }
 
-func (r *Reporter) ReportMismatchNamespace(source ns.Namespace, target ns.Namespace) {
-	reason := "mismatchNamespace"
+func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
+	reason := NS_DIFF
 	details := bson.D{
 		{"source", source.String()},
 		{"target", target.String()},
@@ -90,8 +82,8 @@ func (r *Reporter) ReportMismatchNamespace(source ns.Namespace, target ns.Namesp
 	r.queue <- rep
 }
 
-func (r *Reporter) ReportMismatchCount(namespace ns.Namespace, src int64, target int64) {
-	reason := "countMismatch"
+func (r *Reporter) MismatchCount(namespace ns.Namespace, src int64, target int64) {
+	reason := COUNT_DIFF
 	details := bson.D{
 		{"source", src},
 		{"target", target},
@@ -104,8 +96,8 @@ func (r *Reporter) ReportMismatchCount(namespace ns.Namespace, src int64, target
 	r.queue <- rep
 }
 
-func (r *Reporter) ReportMissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location location) {
-	reason := "missingIndex"
+func (r *Reporter) MissingIndex(namespace ns.Namespace, index *mongo.IndexSpecification, location Location) {
+	reason := INDEX_MISSING
 	details := bson.D{
 		{"missingFrom", location},
 		{"index", index},
@@ -118,8 +110,8 @@ func (r *Reporter) ReportMissingIndex(namespace ns.Namespace, index *mongo.Index
 	r.queue <- rep
 }
 
-func (r *Reporter) ReportMismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
-	reason := "diffIndex"
+func (r *Reporter) MismatchIndex(namespace ns.Namespace, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
+	reason := INDEX_DIFF
 	details := bson.D{
 		{"source", src},
 		{"target", target},
@@ -132,25 +124,65 @@ func (r *Reporter) ReportMismatchIndex(namespace ns.Namespace, src *mongo.IndexS
 	r.queue <- rep
 }
 
-func (r *Reporter) ReportSampleSummary(namespace ns.Namespace, dir string, summary DocSummary) {
-	reason := "collSampleSummary"
+func (r *Reporter) SampleSummary(namespace ns.Namespace, direction Direction, summary DocSummary) {
+	reason := COLL_SUMMARY
 	details := bson.D{
-		{"docsMissingFromSource", summary.MissingOnSrc},
-		{"docsMissingFromTarget", summary.MissingOnTgt},
+		{"docsMissing.src", summary.MissingOnSrc},
+		{"docsMissing.dst", summary.MissingOnTgt},
 	}
 
-	switch dir {
-	case "src -> tgt":
-		details = append(details, bson.E{"docsWithMismatches.srcToTgt", summary.Different})
-	case "tgt -> src":
-		details = append(details, bson.E{"docsWithMismatches.tgtToSrc", summary.Different})
+	switch direction {
+	case SrcToDst:
+		details = append(details, bson.E{"docsWithMismatches.srcToDst", summary.Different})
+	case DstToSrc:
+		details = append(details, bson.E{"docsWithMismatches.dstToSrc", summary.Different})
 	}
 
 	rep := report{
 		namespace: namespace,
 		reason:    reason,
 		details:   details,
-		direction: dir,
+		direction: direction,
+	}
+	r.queue <- rep
+}
+
+func (r *Reporter) MismatchDoc(namespace ns.Namespace, direction Direction, a, b bson.Raw) {
+	reason := DOC_DIFF
+	details := bson.D{
+		{"src", a},
+		{"dst", b},
+		{"direction", direction},
+	}
+
+	rep := report{
+		namespace: namespace,
+		reason:    reason,
+		details:   details,
+		direction: direction,
+	}
+	r.queue <- rep
+}
+
+func (r *Reporter) MissingDoc(namespace ns.Namespace, direction Direction, doc bson.Raw) {
+	reason := DOC_MISSING
+	details := bson.D{
+		{"doc", doc},
+		{"direction", direction},
+	}
+
+	switch direction {
+	case SrcToDst:
+		details = append(details, bson.E{"missingFrom", Target})
+	case DstToSrc:
+		details = append(details, bson.E{"missingFrom", Source})
+	}
+
+	rep := report{
+		namespace: namespace,
+		reason:    reason,
+		details:   details,
+		direction: direction,
 	}
 	r.queue <- rep
 }
@@ -169,7 +201,7 @@ func (r *Reporter) appendDocSummary(rep report, logger zerolog.Logger) {
 	extJson, _ := bson.MarshalExtJSON(filter, false, false)
 	logger.Debug().Msgf("inserting report -- %s", extJson)
 	opts := options.Update().SetUpsert(true)
-	_, err := r.metaCollection().UpdateOne(context.TODO(), filter, update, opts)
+	_, err := r.getCollection(rep.reason).UpdateOne(context.TODO(), filter, update, opts)
 	if err != nil {
 		logger.Error().Err(err).Msgf("unable to append to doc summary -- %s", extJson)
 	}
@@ -184,7 +216,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	report := append(template, rep.details...)
 	extJson, _ := bson.MarshalExtJSON(report, false, false)
 	logger.Debug().Msgf("inserting report -- %s", extJson)
-	_, err := r.metaCollection().InsertOne(context.TODO(), report)
+	_, err := r.getCollection(rep.reason).InsertOne(context.TODO(), report)
 	if err != nil {
 		logger.Error().Err(err).Msgf("unable to insert report -- %s", extJson)
 	}
@@ -193,7 +225,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace.String()).Logger()
-		if rep.reason == "collSampleSummary" {
+		if rep.reason == COLL_SUMMARY {
 			r.appendDocSummary(rep, logger)
 		} else {
 			r.insertReport(rep, logger)
@@ -201,8 +233,13 @@ func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	}
 }
 
-func (r *Reporter) metaCollection() *mongo.Collection {
-	return r.metaClient.Database(r.metaDBName).Collection("report")
+func (r *Reporter) getCollection(reason Reason) *mongo.Collection {
+	switch reason {
+	case DOC_DIFF, DOC_MISSING:
+		return r.metaClient.Database(r.metaDBName).Collection("docs")
+	default:
+		return r.metaClient.Database(r.metaDBName).Collection("report")
+	}
 }
 
 func (r *Reporter) cleanMetaDB() {

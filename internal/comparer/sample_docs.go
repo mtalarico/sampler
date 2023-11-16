@@ -19,22 +19,11 @@ import (
 )
 
 type documentBatch struct {
-	dir   direction
+	dir   reporter.Direction
 	batch batch
 }
 
 type batch map[interface{}]bson.Raw
-
-type direction string
-
-func (d direction) String() string {
-	return string(d)
-}
-
-const (
-	SrcToTgt direction = "src -> tgt"
-	TgtToSrc direction = "tgt -> src"
-)
 
 func (b batch) add(doc bson.Raw) {
 	id := doc.Lookup("_id").String()
@@ -58,8 +47,8 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	})
 
 	logger.Info().Msg("beginning document sample")
-	streamBatches(ctx, logger, jobs, SrcToTgt, source)
-	streamBatches(ctx, logger, jobs, TgtToSrc, target)
+	streamBatches(ctx, logger, jobs, reporter.SrcToDst, source)
+	streamBatches(ctx, logger, jobs, reporter.DstToSrc, target)
 
 	close(jobs)
 	pool.Done()
@@ -105,8 +94,8 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 }
 
 // TODO VARIABLE BATCH SIZE
-func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documentBatch, dir direction, cursor *mongo.Cursor) {
-	logger = logger.With().Str("dir", dir.String()).Logger()
+func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documentBatch, dir reporter.Direction, cursor *mongo.Cursor) {
+	logger = logger.With().Str("dir", string(dir)).Logger()
 	docCount := 0
 	batchCount := 0
 	buffer := make(batch, BATCH_SIZE)
@@ -155,9 +144,9 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	opts := options.Find().SetSort(bson.M{"_id": 1})
 
 	switch toFind.dir {
-	case SrcToTgt:
+	case reporter.SrcToDst:
 		cursor, err = c.targetCollection(namespace).Find(context.TODO(), filter, opts)
-	case TgtToSrc:
+	case reporter.DstToSrc:
 		cursor, err = c.sourceCollection(namespace).Find(context.TODO(), filter, opts)
 	default:
 		logger.Fatal().Msg("invalid comparison direction")
@@ -196,6 +185,7 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 			}
 			if len(comparison.MissingFieldOnDst) > 0 {
 				logger.Debug().Msgf("%s is missing fields on the target", key)
+
 			}
 			if len(comparison.MissingFieldOnSrc) > 0 {
 				logger.Debug().Msgf("%s is missing fields on the source", key)
@@ -203,15 +193,11 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 			if len(comparison.FieldContentsDiffer) > 0 {
 				logger.Debug().Msgf("%s is different between the source and target", key)
 			}
+			c.reporter.MismatchDoc(namespace, a.dir, aDoc, bDoc)
 			summary.Different++
 		} else {
 			logger.Debug().Msgf("_id %v not found", key)
-			switch a.dir {
-			case SrcToTgt:
-				summary.MissingOnTgt++
-			case TgtToSrc:
-				summary.MissingOnSrc++
-			}
+			c.reporter.MissingDoc(namespace, a.dir, aDoc)
 		}
 	}
 	return summary
@@ -219,12 +205,12 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 
 func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, jobs chan documentBatch) {
 	for processing := range jobs {
-		logger = logger.With().Str("dir", processing.dir.String()).Logger()
+		logger = logger.With().Str("dir", string(processing.dir)).Logger()
 		lookedUp := c.batchFind(ctx, logger, namespace, processing)
 		summary := c.batchCompare(ctx, logger, namespace, processing, lookedUp)
 		if summary.HasMismatches() {
 			logger.Error().Msg("mismatch in batch")
-			c.reporter.ReportSampleSummary(namespace, processing.dir.String(), summary)
+			c.reporter.SampleSummary(namespace, processing.dir, summary)
 		}
 	}
 
