@@ -65,7 +65,7 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
-	// c.CompareSampleDocs(ctx, logger, namespace)
+	c.CompareSampleDocs(ctx, logger, namespace)
 	logger.Info().Msg("finished validation")
 }
 
