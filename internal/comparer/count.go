@@ -9,15 +9,11 @@ import (
 
 func (c *Comparer) CompareEstimatedCounts(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	logger = logger.With().Str("c", "count").Logger()
-	source, target := c.GetEstimates(ctx, namespace)
-	logger.Info().Msgf("source estimate: %d, target estimate: %d", source, target)
+	sourceCount, targetCount := c.GetEstimates(ctx, namespace)
+	logger.Info().Msgf("source estimate docs: %d, target estimate docs: %d", sourceCount, targetCount)
 
-	if c.config.DryRun {
-		return
-	}
-
-	if source != target {
-		c.reporter.MismatchCount(namespace.String(), source, target)
+	if sourceCount != targetCount {
+		c.reporter.MismatchCount(namespace.String(), sourceCount, targetCount)
 		logger.Warn().Msg("estimated document counts don't match. (NOTE: this could be the result of metadata differences from unclean shutdowns, consider running a more exact countDocuments if all other tests pass)")
 	} else {
 		logger.Info().Msg("estimated document match")

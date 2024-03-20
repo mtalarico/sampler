@@ -1,5 +1,8 @@
 package doc
 
+// This code is taken directly from mongodb-labs/migration-verifier
+// and is lightly modified to integrate into the sampler
+
 import (
 	"fmt"
 

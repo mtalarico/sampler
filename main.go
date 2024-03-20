@@ -30,7 +30,7 @@ func connectMongo(config cfg.Configuration) (*mongo.Client, *mongo.Client, *mong
 	targetConfig := config.Target.MakeClientOptions()
 	target, err := mongo.Connect(context.TODO(), targetConfig)
 	if err != nil {
-		log.Fatal().Err(err).Msg("cannot connect to destination cluster")
+		log.Fatal().Err(err).Msg("cannot connect to target cluster")
 	}
 
 	var meta *mongo.Client

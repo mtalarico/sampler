@@ -63,7 +63,7 @@ func Init() Configuration {
 		flagSet := flag.CommandLine
 		fmt.Printf("Usage of %s:\n", os.Args[0])
 		required := []string{"src", "dst"}
-		optional := []string{"meta", "metadbname", "verbosity", "log", "clean", "dry"}
+		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "clean", "dry"}
 
 		fmt.Println("[ required ]")
 		for _, name := range required {

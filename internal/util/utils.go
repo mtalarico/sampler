@@ -80,11 +80,12 @@ func SplitNamespace(ns string) (string, string, error) {
 	return split[0], split[1], nil
 }
 
-type Named interface {
+type NamedComparable interface {
 	GetName() string
+	Equal(interface{}) bool
 }
 
-func SortSpec[T Named](spec []T) []T {
+func SortSpec[T NamedComparable](spec []T) []T {
 	sort.SliceStable(spec, func(a, b int) bool {
 		src := spec[a].GetName()
 		tgt := spec[b].GetName()

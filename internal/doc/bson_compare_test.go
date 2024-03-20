@@ -39,7 +39,7 @@ func TestBSONUnorderedCompare(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, result)
 
-	// Missing fields on destination
+	// Missing fields on target
 	dstDoc := bson.D{
 		{"_id", "a"}}
 	result, err = compareDocuments(srcDoc, dstDoc)

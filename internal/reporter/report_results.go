@@ -2,12 +2,14 @@ package reporter
 
 import (
 	"context"
+	"sampler/internal/ns"
 	"sampler/internal/worker"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -67,14 +69,14 @@ func (r *Reporter) MissingNamespace(missing string, loc Location) {
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchNamespace(source string, target string) {
+func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	reason := NS_DIFF
 	details := bson.D{
-		{"src", source},
-		{"dst", target},
+		{"src", source.Specification},
+		{"dst", target.Specification},
 	}
 	rep := report{
-		namespace: source,
+		namespace: source.String(),
 		reason:    reason,
 		details:   details,
 	}
@@ -95,7 +97,7 @@ func (r *Reporter) MismatchCount(namespace string, src int64, target int64) {
 	r.queue <- rep
 }
 
-func (r *Reporter) MissingIndex(namespace string, index *mongo.IndexSpecification, location Location) {
+func (r *Reporter) MissingIndex(namespace string, index mongo.IndexSpecification, location Location) {
 	reason := INDEX_MISSING
 	details := bson.D{
 		{"missingFrom", location},
@@ -109,7 +111,7 @@ func (r *Reporter) MissingIndex(namespace string, index *mongo.IndexSpecificatio
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchIndex(namespace string, src *mongo.IndexSpecification, target *mongo.IndexSpecification) {
+func (r *Reporter) MismatchIndex(namespace string, src mongo.IndexSpecification, target mongo.IndexSpecification) {
 	reason := INDEX_DIFF
 	details := bson.D{
 		{"src", src},
@@ -188,7 +190,7 @@ func (r *Reporter) MissingDoc(namespace string, direction Direction, doc bson.Ra
 	r.queue <- rep
 }
 
-func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
+func (r *Reporter) report(rep report, logger zerolog.Logger) {
 	filter := bson.D{
 		{"reason", rep.reason},
 		{"run", r.startTime},
@@ -220,6 +222,7 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 			{"$set", rep.details},
 		}
 	default:
+		filter = append(filter, bson.E{"_id", primitive.NewObjectID()})
 		update = bson.D{
 			{"$set", rep.details},
 		}
@@ -235,29 +238,10 @@ func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
 	}
 }
 
-// func (r *Reporter) insertReport(rep report, logger zerolog.Logger) {
-// 	template := bson.D{
-// 		{"reason", rep.reason},
-// 		{"run", r.startTime},
-// 		{"ns", rep.namespace.String()},
-// 	}
-// 	report := append(template, rep.details...)
-// 	extJson, _ := bson.MarshalExtJSON(report, false, false)
-// 	logger.Debug().Msgf("upserting report -- %s", extJson)
-// 	_, err := r.getCollection(rep.reason).InsertOne(context.TODO(), report)
-// 	if err != nil {
-// 		logger.Error().Err(err).Msgf("unable to insert report -- %s", extJson)
-// 	}
-// }
-
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace).Logger()
-		// if rep.reason == COLL_SUMMARY {
-		// 	r.appendDocSummary(rep, logger)
-		// } else {
-		r.insertReport(rep, logger)
-		// }
+		r.report(rep, logger)
 	}
 }
 

@@ -28,6 +28,7 @@ type Comparer struct {
 	reporter     *reporter.Reporter
 }
 
+// init this comparer's reporter before returning internal struct
 func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.Client, meta *mongo.Client, startTime time.Time) Comparer {
 	reporter := reporter.NewReporter(meta, config.MetaDBName, config.CleanMeta, startTime)
 
@@ -64,7 +65,7 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	logger.Info().Msg("beginning validation")
 	c.CompareEstimatedCounts(ctx, logger, namespace)
 	c.CompareIndexes(ctx, logger, namespace)
-	c.CompareSampleDocs(ctx, logger, namespace)
+	// c.CompareSampleDocs(ctx, logger, namespace)
 	logger.Info().Msg("finished validation")
 }
 

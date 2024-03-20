@@ -16,7 +16,7 @@ func TestBasicIndexSortAlreadyInOrder(t *testing.T) {
 	}
 	wrappedA := indexWrapper{
 		"test1",
-		&mongo.IndexSpecification{
+		mongo.IndexSpecification{
 			Name:               "test1",
 			Namespace:          "test.test",
 			KeysDocument:       a,
@@ -33,7 +33,7 @@ func TestBasicIndexSortAlreadyInOrder(t *testing.T) {
 	}
 	wrappedB := indexWrapper{
 		"test1",
-		&mongo.IndexSpecification{
+		mongo.IndexSpecification{
 			Name:               "test2",
 			Namespace:          "test.test",
 			KeysDocument:       b,
@@ -55,7 +55,7 @@ func TestBasicIndexSort(t *testing.T) {
 	}
 	wrappedA := indexWrapper{
 		"a_1",
-		&mongo.IndexSpecification{
+		mongo.IndexSpecification{
 			Name:               "a_1",
 			Namespace:          "test.test",
 			KeysDocument:       a,
@@ -72,7 +72,7 @@ func TestBasicIndexSort(t *testing.T) {
 	}
 	wrappedB := indexWrapper{
 		"b_1",
-		&mongo.IndexSpecification{
+		mongo.IndexSpecification{
 			Name:               "b_1",
 			Namespace:          "test.test",
 			KeysDocument:       b,

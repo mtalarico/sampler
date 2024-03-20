@@ -37,7 +37,7 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	}
 	defer source.Close(ctx)
 	defer target.Close(ctx)
-	// TODO variable batch size based on doc size ( 256MB)
+	// TODO variable batch size based on doc size (256MB)
 	jobs := make(chan documentBatch, 100)
 
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "sampleDocWorkers", "sw")
@@ -134,8 +134,9 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 
 	for _, value := range toFind.batch {
 		key := bson.D{}
-		if namespace.Partitioned {
-			elems, err := namespace.PartitionKey.Elements()
+		// if collection is sharded, include shard key value in query to target shard
+		if namespace.Partitioned.Source {
+			elems, err := namespace.PartitionKey.Source.Elements()
 			if err != nil {
 				log.Error().Err(err)
 			}

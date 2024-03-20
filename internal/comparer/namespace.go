@@ -42,17 +42,17 @@ type namespaceMap struct {
 	Target []ns.Namespace
 }
 
-// streams back namespaces that are equal on both the source and target, reports namespaces that are different or missing
+// streams namespaces to worker threads that are present on both the source and target, reports namespaces that are different or missing
 func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, ret chan namespacePair) {
 	logger = logger.With().Str("c", "namespace").Logger()
 
 	nsMap := c.getNamespaces(ctx)
+	if len(nsMap.Source) == 0 && len(nsMap.Target) == 0 {
+		log.Info().Msg("no user namespaces found on the source or target... nothing to do")
+		return
+	}
 
-	// if len(source) == 0 {
-	// 	logger.Error().Msg("no namespaces found on source, nothing to compare")
-	// 	return
-	// }
-
+	// wrap in a type that satisfies NamedComparable and sorty to be properly diff'd
 	wrappedSource, wrappedTarget := wrapColls(nsMap.Source), wrapColls(nsMap.Target)
 	sortedSource := util.SortSpec(wrappedSource)
 	sortedTarget := util.SortSpec(wrappedTarget)
@@ -60,14 +60,11 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	comparison := diff.Diff(logger, sortedSource, sortedTarget)
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
-		logger.Warn().Msg("there are namespace mismatches between source and destination")
+		logger.Warn().Msg("there are namespace mismatches between source and target")
 		logger.Debug().Msgf("%s", comparison.String())
 	}
 	for _, each := range comparison.Equal {
-		c.pushToChannel(logger, each.Namespace, ret)
-	}
-	if c.config.DryRun {
-		return
+		c.makeNamespacePair(logger, each.Namespace, ret)
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
@@ -79,15 +76,16 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Str("ns", each.Source.Namespace.String()).Msgf("%s different between the source and target", each.Source.String())
-		c.reporter.MismatchNamespace(each.Source.Namespace.String(), each.Target.Namespace.String())
+		c.reporter.MismatchNamespace(each.Source.Namespace, each.Target.Namespace)
 		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
-		c.pushToChannel(logger, each.Source.Namespace, ret)
+		c.makeNamespacePair(logger, each.Source.Namespace, ret)
 	}
 }
 
-func (c *Comparer) pushToChannel(logger zerolog.Logger, namespace ns.Namespace, ret chan namespacePair) {
-	sourceSharded, sourceKey := ns.CheckSharded(&c.sourceClient, namespace.Db, namespace.Collection)
-	targetSharded, targetKey := ns.CheckSharded(&c.targetClient, namespace.Db, namespace.Collection)
+// TODO: improve this to have fully independant sharded awareness
+func (c *Comparer) makeNamespacePair(logger zerolog.Logger, namespace ns.Namespace, ret chan namespacePair) {
+	sourceSharded, sourceKey := ns.IsSharded(&c.sourceClient, namespace.Db, namespace.Collection)
+	targetSharded, targetKey := ns.IsSharded(&c.targetClient, namespace.Db, namespace.Collection)
 
 	pair := namespacePair{
 		Db:            namespace.Db,
@@ -117,12 +115,13 @@ func (c *Comparer) getNamespaces(ctx context.Context) namespaceMap {
 	}
 }
 
+// do not need to worry about missing namespaces here, if the namespace is found, we'll find it in the diff
 func (c *Comparer) includedUserNamespaces(ctx context.Context, included []string) namespaceMap {
 	var source, target []ns.Namespace
 	for _, each := range included {
 		db, coll, err := util.SplitNamespace(each)
 		if err != nil {
-			log.Error().Err(err).Msg("error splitting namespace")
+			log.Error().Err(err).Msg("")
 		}
 		if eachSrc, err := ns.GetOneUserCollections(&c.sourceClient, db, coll); err == nil {
 			source = append(source, eachSrc)

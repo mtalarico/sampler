@@ -4,22 +4,16 @@ import (
 	"sampler/internal/util"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 )
 
-type NamedComparable interface {
-	GetName() string
-	Equal(interface{}) bool
-}
-
-type pair[T NamedComparable] struct {
+type pair[T util.NamedComparable] struct {
 	Source T
 	Target T
 }
 
-type MismatchDetails[T NamedComparable] struct {
+type MismatchDetails[T util.NamedComparable] struct {
 	MissingOnSrc []T
 	MissingOnTgt []T
 	Different    []pair[T]
@@ -62,15 +56,14 @@ func (m MismatchDetails[T]) String() string {
 	return b.String()
 }
 
-// Walk both slices determining if missing from the source, missing from the target, or are present on both and different.
-// Sort source and target before diff
-func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) MismatchDetails[T] {
+// Walk both sorted slices determining if missing from the source, missing from the target, or are present on both and different.
+// ** assumed slices are sorted before-hand **
+func Diff[T util.NamedComparable](logger zerolog.Logger, source []T, target []T) MismatchDetails[T] {
 	var missingOnSrc, missingOnTgt, equal []T
 	var different []pair[T]
 	logger = logger.With().Str("c", "diff").Logger()
 
-	srcLen := len(source)
-	tgtLen := len(target)
+	srcLen, tgtLen := len(source), len(target)
 	if srcLen == 0 {
 		missingOnSrc = append(missingOnSrc, target...)
 		return MismatchDetails[T]{
@@ -92,12 +85,10 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 	maxLen := util.Max(srcLen, tgtLen)
 	logger.Debug().Msgf("source count: %d, target count: %d", srcLen, tgtLen)
 
-	for srcItr, tgtItr := 0, 0; ; {
+	for srcItr, tgtItr := 0, 0; srcItr < srcLen || tgtItr < tgtLen; {
 		logger.Trace().Msgf("srcItr %d, tgtItr %d, srcLen %d, tgtLen %d, maxLen %d", srcItr, tgtItr, srcLen, tgtLen, maxLen)
-		if srcItr >= srcLen && tgtItr >= tgtLen {
-			break
-		}
-		// These two checks for an itr being exhausted come first to handle length mismatches > 1 (e.g. [a_1] vs [a_1, b_1, c_1])
+
+		// Handle remaining elements on either side
 		if srcItr >= srcLen {
 			logger.Trace().Msg("out of items on source")
 			missingOnSrc = append(missingOnSrc, target[tgtItr])
@@ -115,42 +106,32 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 		}
 
 		// both iterators are not expired (they passed the above two ifs)
-		srcName := source[srcItr].GetName()
-		tgtName := target[tgtItr].GetName()
+		srcName, tgtName := source[srcItr].GetName(), target[tgtItr].GetName()
 
-		if tgtName < srcName {
+		switch {
+		case tgtName < srcName:
 			logger.Trace().Msgf("srcName (%s) > tgtName (%s) -- missing %s on source", srcName, tgtName, tgtName)
 			missingOnSrc = append(missingOnSrc, target[tgtItr])
-			logger.Trace().Msgf("incrementing tgt %d -> %d (src: %d)", tgtItr, tgtItr+1, srcItr)
 			tgtItr++
-			continue
-		}
-
-		if srcName < tgtName {
+		case srcName < tgtName:
 			logger.Trace().Msgf("tgtName (%s) > srcName (%s) -- missing %s on target", tgtName, srcName, srcName)
 			missingOnTgt = append(missingOnTgt, source[srcItr])
-			logger.Trace().Msgf("incrementing src %d -> %d (tgt: %d)", srcItr, srcItr+1, tgtItr)
 			srcItr++
-			continue
-		}
-
-		// if we got past everything, we are in the equality condition and check the specs against equal other before moving each cursor forward one
-		logger.Trace().Msgf("checking Name src %s (itr: %d), dst %s (itr: %d)", srcName, srcItr, tgtName, tgtItr)
-		if !cmp.Equal(source[srcItr], target[tgtItr]) {
-			logger.Trace().Msgf("srcName (%s) != tgtName (%s)", srcName, tgtName)
-			logger.Trace().Msgf("src %+v | tgt %+v", source[srcItr], target[tgtItr])
-			diffPair := pair[T]{Source: source[srcItr], Target: target[tgtItr]}
-			different = append(different, diffPair)
-			spew.Printf("%+v", source[srcItr])
-			spew.Printf("%+v", target[tgtItr])
+		default: // Equality condition
+			logger.Trace().Msgf("checking Name src %s (itr: %d), dst %s (itr: %d)", srcName, srcItr, tgtName, tgtItr)
+			if !cmp.Equal(source[srcItr], target[tgtItr]) {
+				logger.Trace().Msgf("srcName (%s) != tgtName (%s)", srcName, tgtName)
+				logger.Trace().Msgf("src %+v | tgt %+v", source[srcItr], target[tgtItr])
+				diffPair := pair[T]{Source: source[srcItr], Target: target[tgtItr]}
+				different = append(different, diffPair)
+			} else {
+				logger.Trace().Msgf("incrementing src: %d -> %d, tgt %d -> %d", srcItr, srcItr+1, tgtItr, tgtItr+1)
+				equal = append(equal, source[srcItr])
+			}
 			srcItr, tgtItr = srcItr+1, tgtItr+1
-			continue
 		}
-
-		logger.Trace().Msgf("incrementing src: %d -> %d, tgt %d -> %d", srcItr, srcItr+1, tgtItr, tgtItr+1)
-		equal = append(equal, source[srcItr])
-		srcItr, tgtItr = srcItr+1, tgtItr+1
 	}
+
 	return MismatchDetails[T]{
 		MissingOnSrc: missingOnSrc,
 		MissingOnTgt: missingOnTgt,
