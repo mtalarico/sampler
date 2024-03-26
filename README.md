@@ -1,9 +1,13 @@
 Sampler
 
-WIP
+WIP statistical sampling to validate two mongodb cluster's sychronization
+
+Checks
+- estimated document counts
+- indexes
+- sample of documents
 
 TODO:
 - [x] remove hard-coded strings from code, replace with consts
 - [x] better help output
-- [] Sharded collection validation support
-- [] collation support for index checks (contingent on Go driver updates)
+- [x] Sharded collection validation support
