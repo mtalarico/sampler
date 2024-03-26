@@ -82,7 +82,7 @@ func SplitNamespace(ns string) (string, string, error) {
 
 type NamedComparable interface {
 	GetName() string
-	Equal(interface{}) bool
+	Equal(any) bool
 }
 
 func SortSpec[T NamedComparable](spec []T) []T {

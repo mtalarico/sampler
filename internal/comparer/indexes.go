@@ -8,7 +8,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
@@ -28,20 +27,20 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Msgf("%s is missing on the source", each.Name)
-		c.reporter.MissingIndex(namespace.String(), each.IndexSpecification, "source")
+		c.reporter.MissingIndex(namespace.String(), each.Raw, "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
 		logger.Error().Msgf("%s is missing on the target", each.Name)
-		c.reporter.MissingIndex(namespace.String(), each.IndexSpecification, "target")
+		c.reporter.MissingIndex(namespace.String(), each.Raw, "target")
 	}
 	for _, each := range comparison.Different {
 		logger.Error().Msgf("%s is different between the source and target", each.Source.Name)
-		c.reporter.MismatchIndex(namespace.String(), each.Source.IndexSpecification, each.Target.IndexSpecification)
+		c.reporter.MismatchIndex(namespace.String(), each.Source.Raw, each.Target.Raw)
 	}
 }
 
-func (c *Comparer) getIndexSpecs(ctx context.Context, namespace namespacePair) ([]mongo.IndexSpecification, []mongo.IndexSpecification) {
-	var sourceSpecs, targetSpecs []mongo.IndexSpecification
+func (c *Comparer) getIndexSpecs(ctx context.Context, namespace namespacePair) ([]bson.Raw, []bson.Raw) {
+	var sourceSpecs, targetSpecs []bson.Raw
 	sortedIndexesPipeline := bson.A{bson.D{{"$indexStats", bson.D{}}}, bson.D{{"$sort", bson.D{{"spec", 1}}}}, bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}}}
 	sourceCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, sortedIndexesPipeline)
 	if err != nil {

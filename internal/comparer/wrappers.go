@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sampler/internal/ns"
 
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 /// Wraps a namespace into a format that meets the NamedComparable trait -- used for sorting specifications (NS or Index)
@@ -19,8 +19,14 @@ func (c nsWrapper) GetName() string {
 }
 
 // TODO better metadata checking
-func (c nsWrapper) Equal(to interface{}) bool {
-	return bytes.Equal(c.Specification.Options, to.(nsWrapper).Specification.Options)
+func (c nsWrapper) Equal(to any) bool {
+	a := c.Specification
+	b := to.(nsWrapper).Specification
+	return a.Name == b.Name &&
+		a.ReadOnly == b.ReadOnly &&
+		a.Type == b.Type &&
+		a.IDIndex.Name == b.IDIndex.Name &&
+		bytes.Equal(a.Options, b.Options)
 }
 
 func wrapColls(specs []ns.Namespace) []nsWrapper {
@@ -32,10 +38,9 @@ func wrapColls(specs []ns.Namespace) []nsWrapper {
 }
 
 // Wraps an index specification into a format that meets the NamedComparable trait -- used for sorting specifications (NS or Index)
-
 type indexWrapper struct {
 	Name string
-	mongo.IndexSpecification
+	bson.Raw
 }
 
 func (i indexWrapper) GetName() string {
@@ -43,43 +48,14 @@ func (i indexWrapper) GetName() string {
 }
 
 // Note mongo Go driver doesn't support collation on IndexSpecifications yet, so we cannot check it
-func (i indexWrapper) Equal(to interface{}) bool {
-	a := i.IndexSpecification
-	b := to.(indexWrapper).IndexSpecification
-	equal := bytes.Equal(a.KeysDocument, b.KeysDocument)
-	if a.Clustered != nil && b.Clustered != nil {
-		equal = equal && (*a.Clustered == *b.Clustered)
-	} else if a.Clustered != nil || b.Clustered != nil {
-		return false
-	}
-	if a.ExpireAfterSeconds != nil && b.ExpireAfterSeconds != nil {
-		equal = equal && (*a.ExpireAfterSeconds == *b.ExpireAfterSeconds)
-	} else if a.ExpireAfterSeconds != nil || b.ExpireAfterSeconds != nil {
-		return false
-	}
-	if a.Sparse != nil && b.Sparse != nil {
-		equal = equal && (*a.Sparse == *b.Sparse)
-	} else if a.Sparse != nil || b.Sparse != nil {
-		return false
-	}
-	if a.Unique != nil && b.Unique != nil {
-		equal = equal && (*a.Unique == *b.Unique)
-	} else if a.Unique != nil || b.Unique != nil {
-		return false
-	}
-
-	equal = equal &&
-		a.Version == b.Version &&
-		a.Namespace == b.Namespace &&
-		a.Name == b.Name
-
-	return equal
+func (a indexWrapper) Equal(b any) bool {
+	return bytes.Equal(a.Raw, b.(indexWrapper).Raw)
 }
 
-func wrapIndexes(specs []mongo.IndexSpecification) []indexWrapper {
+func wrapIndexes(specs []bson.Raw) []indexWrapper {
 	wrapped := []indexWrapper{}
 	for _, each := range specs {
-		wrapped = append(wrapped, indexWrapper{each.Name, each})
+		wrapped = append(wrapped, indexWrapper{each.Lookup("name").String(), each})
 	}
 	return wrapped
 }

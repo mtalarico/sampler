@@ -4,7 +4,6 @@ import (
 	"sampler/internal/util"
 	"strings"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/rs/zerolog"
 )
 
@@ -96,7 +95,6 @@ func Diff[T util.NamedComparable](logger zerolog.Logger, source []T, target []T)
 			tgtItr++
 			continue
 		}
-
 		if tgtItr >= tgtLen {
 			logger.Trace().Msg("out of items on target")
 			missingOnTgt = append(missingOnTgt, source[srcItr])
@@ -119,7 +117,7 @@ func Diff[T util.NamedComparable](logger zerolog.Logger, source []T, target []T)
 			srcItr++
 		default: // Equality condition
 			logger.Trace().Msgf("checking Name src %s (itr: %d), dst %s (itr: %d)", srcName, srcItr, tgtName, tgtItr)
-			if !cmp.Equal(source[srcItr], target[tgtItr]) {
+			if !source[srcItr].Equal(target[tgtItr]) {
 				logger.Trace().Msgf("srcName (%s) != tgtName (%s)", srcName, tgtName)
 				logger.Trace().Msgf("src %+v | tgt %+v", source[srcItr], target[tgtItr])
 				diffPair := pair[T]{Source: source[srcItr], Target: target[tgtItr]}

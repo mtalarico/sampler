@@ -97,7 +97,7 @@ func (r *Reporter) MismatchCount(namespace string, src int64, target int64) {
 	r.queue <- rep
 }
 
-func (r *Reporter) MissingIndex(namespace string, index mongo.IndexSpecification, location Location) {
+func (r *Reporter) MissingIndex(namespace string, index bson.Raw, location Location) {
 	reason := INDEX_MISSING
 	details := bson.D{
 		{"missingFrom", location},
@@ -111,7 +111,7 @@ func (r *Reporter) MissingIndex(namespace string, index mongo.IndexSpecification
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchIndex(namespace string, src mongo.IndexSpecification, target mongo.IndexSpecification) {
+func (r *Reporter) MismatchIndex(namespace string, src bson.Raw, target bson.Raw) {
 	reason := INDEX_DIFF
 	details := bson.D{
 		{"src", src},
