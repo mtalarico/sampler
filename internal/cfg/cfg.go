@@ -30,7 +30,6 @@ type Configuration struct {
 	Verbosity  string
 	LogFile    string
 	CleanMeta  bool
-	DryRun     bool
 }
 
 func Init() Configuration {
@@ -55,7 +54,6 @@ func Init() Configuration {
 	flag.StringVar(&config.Verbosity, "verbosity", "info", "log level [ error | warn | info | debug | trace ]")
 	flag.StringVar(&config.LogFile, "log", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
-	flag.BoolVar(&config.DryRun, "dry", false, "reports estimated counts + calculated sample size based on input z and error rate, then exits. Cannot be used in congunction with cleanMeta")
 
 	config.IncludeNS = flag.StringArray("ns", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
 
@@ -63,7 +61,7 @@ func Init() Configuration {
 		flagSet := flag.CommandLine
 		fmt.Printf("Usage of %s:\n", os.Args[0])
 		required := []string{"src", "dst"}
-		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "clean", "dry"}
+		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "clean"}
 
 		fmt.Println("[ required ]")
 		for _, name := range required {
@@ -98,11 +96,6 @@ func (c *Configuration) validate() {
 	if c.Target.URI == "" {
 		flag.Usage()
 		fmt.Println("missing required parameters: --dst")
-		os.Exit(1)
-	}
-	if c.DryRun && c.CleanMeta {
-		flag.Usage()
-		fmt.Println("cannot use --clean with --dry, specify one or the other")
 		os.Exit(1)
 	}
 }

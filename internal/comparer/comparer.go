@@ -44,10 +44,6 @@ func (c *Comparer) CompareAll(ctx context.Context) {
 	namespacesToProcess := make(chan namespacePair)
 	logger := log.With().Logger()
 
-	if c.config.DryRun {
-		logger.Info().Msg("** dry run **")
-	}
-
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "namespaceWorkers")
 	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
 		c.processNS(iCtx, iLogger, namespacesToProcess)
