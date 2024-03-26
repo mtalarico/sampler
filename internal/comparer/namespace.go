@@ -57,7 +57,7 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 		logger.Debug().Msgf("%s", comparison.String())
 	}
 	for _, each := range comparison.Equal {
-		c.makeNamespacePair(logger, each, ret)
+		c.makeNamespacePair(ctx, logger, each, ret)
 	}
 	for _, each := range comparison.MissingOnSrc {
 		logger.Error().Str("ns", each.String()).Msgf("%s missing on the source", each.String())
@@ -71,12 +71,11 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 		logger.Warn().Str("ns", each.Source.String()).Msgf("%s different between the source and target, still checking", each.Source.String())
 		c.reporter.MismatchNamespace(each.Source, each.Target)
 		logger.Trace().Msgf("putting ns %s on channel", each.Source)
-		c.makeNamespacePair(logger, each.Source, ret)
+		c.makeNamespacePair(ctx, logger, each.Source, ret)
 	}
 }
 
-// TODO: improve this to have fully independant sharded awareness
-func (c *Comparer) makeNamespacePair(logger zerolog.Logger, namespace ns.Namespace, ret chan namespacePair) {
+func (c *Comparer) makeNamespacePair(ctx context.Context, logger zerolog.Logger, namespace ns.Namespace, ret chan namespacePair) {
 	sourceSharded, sourceKey := ns.IsSharded(&c.sourceClient, namespace.Db, namespace.Collection)
 	targetSharded, targetKey := ns.IsSharded(&c.targetClient, namespace.Db, namespace.Collection)
 

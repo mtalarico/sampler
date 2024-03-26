@@ -37,7 +37,7 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	// TODO variable batch size based on doc size (256MB)
 	jobs := make(chan documentBatch, 100)
 
-	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "sampleDocWorkers", "sw")
+	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "sampleDocWorkers", "sdw")
 	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
 		c.processDocs(iCtx, iLogger, namespace, jobs)
 	})
@@ -122,14 +122,21 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 }
 
 func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace namespacePair, toFind documentBatch) documentBatch {
-	// TODO, turn to bulk ops, fix sharded
 	buffer := make(batch, BATCH_SIZE)
 	var keys []bson.D
 
 	for _, value := range toFind.batch {
 		key := bson.D{}
 		// if collection is sharded, include shard key value in query to target shard
-		if namespace.Partitioned.Source {
+		if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
+			elems, err := namespace.PartitionKey.Target.Elements()
+			if err != nil {
+				log.Error().Err(err)
+			}
+			for _, each := range elems {
+				key = append(key, bson.E{each.Key(), value.Lookup(each.Key())})
+			}
+		} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
 			elems, err := namespace.PartitionKey.Source.Elements()
 			if err != nil {
 				log.Error().Err(err)
@@ -155,7 +162,7 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	case reporter.DstToSrc:
 		cursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Find(context.TODO(), filter, opts)
 	default:
-		logger.Fatal().Msg("invalid comparison direction")
+		logger.Fatal().Msg("invalid comparison direction?")
 	}
 
 	if err != nil {
