@@ -10,4 +10,4 @@ Checks
 TODO:
 - [x] remove hard-coded strings from code, replace with consts
 - [x] better help output
-- [x] Sharded collection validation support
+- [x] sharded collection validation support
