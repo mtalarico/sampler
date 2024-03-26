@@ -60,5 +60,5 @@ func init() {
 
 func main() {
 	ctx := context.Background()
-	compare.CompareAll(ctx)
+	compare.Compare(ctx)
 }

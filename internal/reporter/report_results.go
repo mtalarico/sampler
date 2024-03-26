@@ -72,8 +72,8 @@ func (r *Reporter) MissingNamespace(missing string, loc Location) {
 func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	reason := NS_DIFF
 	details := bson.D{
-		{"src", source.Specification},
-		{"dst", target.Specification},
+		{"src", source},
+		{"dst", target},
 	}
 	rep := report{
 		namespace: source.String(),

@@ -2,17 +2,32 @@ package diff
 
 import (
 	"sampler/internal/util"
+	"sort"
 	"strings"
 
 	"github.com/rs/zerolog"
 )
 
-type pair[T util.NamedComparable] struct {
+type NamedComparable interface {
+	GetName() string
+	Equal(any) bool
+}
+
+func SortSpec[T NamedComparable](spec []T) []T {
+	sort.SliceStable(spec, func(a, b int) bool {
+		src := spec[a].GetName()
+		tgt := spec[b].GetName()
+		return src < tgt
+	})
+	return spec
+}
+
+type pair[T NamedComparable] struct {
 	Source T
 	Target T
 }
 
-type MismatchDetails[T util.NamedComparable] struct {
+type MismatchDetails[T NamedComparable] struct {
 	MissingOnSrc []T
 	MissingOnTgt []T
 	Different    []pair[T]
@@ -57,7 +72,7 @@ func (m MismatchDetails[T]) String() string {
 
 // Walk both sorted slices determining if missing from the source, missing from the target, or are present on both and different.
 // ** assumed slices are sorted before-hand **
-func Diff[T util.NamedComparable](logger zerolog.Logger, source []T, target []T) MismatchDetails[T] {
+func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) MismatchDetails[T] {
 	var missingOnSrc, missingOnTgt, equal []T
 	var different []pair[T]
 	logger = logger.With().Str("c", "diff").Logger()

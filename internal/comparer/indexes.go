@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"sampler/internal/diff"
+	"sampler/internal/idx"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -13,11 +14,10 @@ import (
 func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	logger = logger.With().Str("c", "index").Logger()
 
-	source, target := c.getIndexSpecs(ctx, namespace)
-	wrappedSource, wrappedTarget := wrapIndexes(source), wrapIndexes(target)
+	source, target := c.getIndexes(ctx, namespace)
 
 	// sorted from getIndexSpecs
-	comparison := diff.Diff(logger, wrappedSource, wrappedTarget)
+	comparison := diff.Diff(logger, source, target)
 
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
@@ -39,7 +39,7 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	}
 }
 
-func (c *Comparer) getIndexSpecs(ctx context.Context, namespace namespacePair) ([]bson.Raw, []bson.Raw) {
+func (c *Comparer) getIndexes(ctx context.Context, namespace namespacePair) ([]idx.Index, []idx.Index) {
 	var sourceSpecs, targetSpecs []bson.Raw
 	sortedIndexesPipeline := bson.A{bson.D{{"$indexStats", bson.D{}}}, bson.D{{"$sort", bson.D{{"spec", 1}}}}, bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}}}
 	sourceCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, sortedIndexesPipeline)
@@ -59,5 +59,5 @@ func (c *Comparer) getIndexSpecs(ctx context.Context, namespace namespacePair) (
 		log.Fatal().Err(err).Msg("target index specification decoding error")
 	}
 
-	return sourceSpecs, targetSpecs
+	return idx.FromBson(sourceSpecs), idx.FromBson(targetSpecs)
 }

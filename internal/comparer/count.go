@@ -16,7 +16,7 @@ func (c *Comparer) CompareEstimatedCounts(ctx context.Context, logger zerolog.Lo
 		c.reporter.MismatchCount(namespace.String(), sourceCount, targetCount)
 		logger.Warn().Msg("estimated document counts don't match. (NOTE: this could be the result of metadata differences from unclean shutdowns, consider running a more exact countDocuments if all other tests pass)")
 	} else {
-		logger.Info().Msg("estimated document counts match")
+		logger.Info().Msg("estimated document match")
 	}
 }
 

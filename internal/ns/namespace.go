@@ -1,6 +1,7 @@
 package ns
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -21,6 +22,20 @@ type Namespace struct {
 
 func (ns Namespace) String() string {
 	return ns.Db + "." + ns.Collection
+}
+
+func (ns Namespace) GetName() string {
+	return ns.String()
+}
+
+func (src Namespace) Equal(tgt any) bool {
+	a := src.Specification
+	b := tgt.(Namespace).Specification
+	return a.Name == b.Name &&
+		a.ReadOnly == b.ReadOnly &&
+		a.Type == b.Type &&
+		a.IDIndex.Name == b.IDIndex.Name &&
+		bytes.Equal(a.Options, b.Options)
 }
 
 var (
@@ -73,7 +88,7 @@ func AllUserCollections(client *mongo.Client, includeViews bool, additionalExclu
 			return nil, err
 		}
 		for _, spec := range specifications {
-			log.Trace().Msgf("found coll spec %v", spec)
+			log.Trace().Msgf("found coll spec %+v", spec)
 			ns := Namespace{Db: dbName, Collection: spec.Name, Specification: spec}
 			namespaces = append(namespaces, ns)
 		}

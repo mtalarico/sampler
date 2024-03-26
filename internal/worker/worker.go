@@ -29,6 +29,8 @@ func NewWorkerPool(logger zerolog.Logger, numWorkers int, workerName string, key
 	}
 }
 
+// Starts worker pool with a given function to be processed by Pool.num workers
+// takes in ctx and logger to capture worker num and ctx generated in this function
 func (p *Pool) Start(process func(context.Context, zerolog.Logger)) {
 	for i := 0; i < p.num; i++ {
 		workerNum := i

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"sort"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -73,23 +72,9 @@ func IsMongos(client *mongo.Client) bool {
 }
 
 func SplitNamespace(ns string) (string, string, error) {
-	split := strings.Split(ns, ".")
-	if len(split) != 2 {
+	db, coll, found := strings.Cut(ns, ".")
+	if !found {
 		return "", "", errors.New("malformed ns format")
 	}
-	return split[0], split[1], nil
-}
-
-type NamedComparable interface {
-	GetName() string
-	Equal(any) bool
-}
-
-func SortSpec[T NamedComparable](spec []T) []T {
-	sort.SliceStable(spec, func(a, b int) bool {
-		src := spec[a].GetName()
-		tgt := spec[b].GetName()
-		return src < tgt
-	})
-	return spec
+	return db, coll, nil
 }

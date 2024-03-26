@@ -37,25 +37,18 @@ func (ns namespacePair) Debug() string {
 	return base + " }"
 }
 
-type namespaceMap struct {
-	Source []ns.Namespace
-	Target []ns.Namespace
-}
-
 // streams namespaces to worker threads that are present on both the source and target, reports namespaces that are different or missing
 func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, ret chan namespacePair) {
 	logger = logger.With().Str("c", "namespace").Logger()
 
-	nsMap := c.getNamespaces(ctx)
-	if len(nsMap.Source) == 0 && len(nsMap.Target) == 0 {
+	source, target := c.getNamespaces(ctx)
+	if len(source) == 0 && len(target) == 0 {
 		log.Info().Msg("no user namespaces found on the source or target... nothing to do")
 		return
 	}
 
-	// wrap in a type that satisfies NamedComparable and sorty to be properly diff'd
-	wrappedSource, wrappedTarget := wrapColls(nsMap.Source), wrapColls(nsMap.Target)
-	sortedSource := util.SortSpec(wrappedSource)
-	sortedTarget := util.SortSpec(wrappedTarget)
+	sortedSource := diff.SortSpec(source)
+	sortedTarget := diff.SortSpec(target)
 
 	comparison := diff.Diff(logger, sortedSource, sortedTarget)
 	logger.Trace().Msgf("%s", comparison.String())
@@ -64,21 +57,21 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 		logger.Debug().Msgf("%s", comparison.String())
 	}
 	for _, each := range comparison.Equal {
-		c.makeNamespacePair(logger, each.Namespace, ret)
+		c.makeNamespacePair(logger, each, ret)
 	}
 	for _, each := range comparison.MissingOnSrc {
-		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the source", each.Namespace.String())
-		c.reporter.MissingNamespace(each.Namespace.String(), "source")
+		logger.Error().Str("ns", each.String()).Msgf("%s missing on the source", each.String())
+		c.reporter.MissingNamespace(each.String(), "source")
 	}
 	for _, each := range comparison.MissingOnTgt {
-		logger.Error().Str("ns", each.Namespace.String()).Msgf("%s missing on the target", each.Namespace.String())
-		c.reporter.MissingNamespace(each.Namespace.String(), "target")
+		logger.Error().Str("ns", each.String()).Msgf("%s missing on the target", each.String())
+		c.reporter.MissingNamespace(each.String(), "target")
 	}
 	for _, each := range comparison.Different {
-		logger.Error().Str("ns", each.Source.Namespace.String()).Msgf("%s different between the source and target", each.Source.String())
-		c.reporter.MismatchNamespace(each.Source.Namespace, each.Target.Namespace)
-		logger.Trace().Msgf("putting ns %s on channel", each.Source.Namespace)
-		c.makeNamespacePair(logger, each.Source.Namespace, ret)
+		logger.Warn().Str("ns", each.Source.String()).Msgf("%s different between the source and target, still checking", each.Source.String())
+		c.reporter.MismatchNamespace(each.Source, each.Target)
+		logger.Trace().Msgf("putting ns %s on channel", each.Source)
+		c.makeNamespacePair(logger, each.Source, ret)
 	}
 }
 
@@ -105,7 +98,8 @@ func (c *Comparer) makeNamespacePair(logger zerolog.Logger, namespace ns.Namespa
 	ret <- pair
 }
 
-func (c *Comparer) getNamespaces(ctx context.Context) namespaceMap {
+// do not need to worry about handling missing namespaces here, will compute that in the diff
+func (c *Comparer) getNamespaces(ctx context.Context) ([]ns.Namespace, []ns.Namespace) {
 	if len(*c.config.IncludeNS) > 0 {
 		log.Info().Strs("includeNS", *c.config.IncludeNS).Msg("looking for included namespaces")
 		return c.includedUserNamespaces(ctx, *c.config.IncludeNS)
@@ -115,13 +109,13 @@ func (c *Comparer) getNamespaces(ctx context.Context) namespaceMap {
 	}
 }
 
-// do not need to worry about missing namespaces here, if the namespace is found, we'll find it in the diff
-func (c *Comparer) includedUserNamespaces(ctx context.Context, included []string) namespaceMap {
+func (c *Comparer) includedUserNamespaces(ctx context.Context, included []string) ([]ns.Namespace, []ns.Namespace) {
 	var source, target []ns.Namespace
 	for _, each := range included {
 		db, coll, err := util.SplitNamespace(each)
 		if err != nil {
-			log.Error().Err(err).Msg("")
+			log.Error().Err(err).Msg(each + " is not a proper namespace format, skipping")
+			continue
 		}
 		if eachSrc, err := ns.GetOneUserCollections(&c.sourceClient, db, coll); err == nil {
 			source = append(source, eachSrc)
@@ -130,10 +124,10 @@ func (c *Comparer) includedUserNamespaces(ctx context.Context, included []string
 			target = append(target, eachTgt)
 		}
 	}
-	return namespaceMap{Source: source, Target: target}
+	return source, target
 }
 
-func (c *Comparer) allUserNamespaces(ctx context.Context) namespaceMap {
+func (c *Comparer) allUserNamespaces(ctx context.Context) ([]ns.Namespace, []ns.Namespace) {
 	source, err := ns.AllUserCollections(&c.sourceClient, false, c.config.MetaDBName)
 	if err != nil {
 		log.Error().Err(err).Msg("")
@@ -142,5 +136,5 @@ func (c *Comparer) allUserNamespaces(ctx context.Context) namespaceMap {
 	if err != nil {
 		log.Error().Err(err).Msg("")
 	}
-	return namespaceMap{Source: source, Target: target}
+	return source, target
 }
