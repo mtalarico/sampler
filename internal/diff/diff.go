@@ -22,15 +22,10 @@ func SortSpec[T NamedComparable](spec []T) []T {
 	return spec
 }
 
-type pair[T NamedComparable] struct {
-	Source T
-	Target T
-}
-
 type Diff[T NamedComparable] struct {
 	MissingOnSrc []T
 	MissingOnTgt []T
-	Different    []pair[T]
+	Different    []util.Pair[T]
 	Equal        []T
 }
 
@@ -74,7 +69,7 @@ func (m Diff[T]) String() string {
 // ** assumed slices are sorted before-hand **
 func Compare[T NamedComparable](logger zerolog.Logger, source []T, target []T) Diff[T] {
 	var missingOnSrc, missingOnTgt, equal []T
-	var different []pair[T]
+	var different []util.Pair[T]
 	logger = logger.With().Str("c", "diff").Logger()
 
 	srcLen, tgtLen := len(source), len(target)
@@ -135,7 +130,7 @@ func Compare[T NamedComparable](logger zerolog.Logger, source []T, target []T) D
 			if !source[srcItr].Equal(target[tgtItr]) {
 				logger.Trace().Msgf("srcName (%s) != tgtName (%s)", srcName, tgtName)
 				logger.Trace().Msgf("src %+v | tgt %+v", source[srcItr], target[tgtItr])
-				diffPair := pair[T]{Source: source[srcItr], Target: target[tgtItr]}
+				diffPair := util.Pair[T]{Source: source[srcItr], Target: target[tgtItr]}
 				different = append(different, diffPair)
 			} else {
 				logger.Trace().Msgf("incrementing src: %d -> %d, tgt %d -> %d", srcItr, srcItr+1, tgtItr, tgtItr+1)

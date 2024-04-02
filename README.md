@@ -1,11 +1,13 @@
-Sampler
+# Sampler
 
-WIP statistical sampling to validate two mongodb cluster's sychronization
+**DISCLAIMER: this is not an official MongoDB product, rather it is expiramental code that should be used at your own risk. As with any software, test thoroughly in a lower environment.**
 
-Checks
+WIP statistical sampling to validate two mongodb cluster's sychronization.
+
+Compares
 - estimated document counts
 - indexes
-- sample of documents
+- sample of documents based on statistical analysis
 
 TODO:
 - [x] remove hard-coded strings from code, replace with consts
