@@ -45,9 +45,8 @@ func Init() Configuration {
 	flag.StringVar(&config.Meta.URI, "meta", "", "meta connection string, defaults to target")
 	flag.StringVar(&config.MetaDBName, "metadbname", "sampler", "meta connection string")
 
-	// flag.BoolVar(&config.Compare.PrintWholeDoc, "printWholeDoc", false, fmt.Sprintf("%s\n\t- options: %s", "whether to print whole documents to the log (WARNING: can expose sensitive data)", "true, false (default false)"))
-	flag.Float64Var(&config.Compare.Zscore, "zscore", 2.58, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* float zscore associated with confidence level (assumes a normal distribution and random sampling)")
-	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* error rate as a float percentage")
+	flag.Float64Var(&config.Compare.Zscore, "zscore", 2.58, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* zscore as a float for Cochran's sample size")
+	flag.Float64Var(&config.Compare.ErrorRate, "errRate", 0.01, "*DONT TOUCH UNLESS YOU KNOW WHAT YOURE DOING* error rate as a float percentage for Cochran's sample size")
 
 	flag.Int64Var(&config.Compare.ForceSampleSize, "forceSampleSize", 0, "override sampling logic and specify fixed number of docs to check")
 

@@ -43,11 +43,13 @@ func Min64(a int64, b int64) int64 {
 	}
 }
 
-func GetSampleSize(N int64, z float64, eps float64) int64 {
+// using Cochran's sample size to get num docs needed
+// for a population size (p), the z-value from a z-table (z), and an error rate (eps)
+func GetSampleSize(p int64, z float64, eps float64) int64 {
 	prop := 0.5 // 50% population proportion
 
-	n := (math.Pow(z, 2) * prop * (1 - prop)) / math.Pow(eps, 2)
-	n_prime := n / (1 + ((math.Pow(z, 2) * prop * (1 - prop)) / (math.Pow(eps, 2) * float64(N))))
+	n_zero := (math.Pow(z, 2) * prop * (1 - prop)) / math.Pow(eps, 2)
+	n_prime := n_zero / (1 + ((math.Pow(z, 2) * prop * (1 - prop)) / (math.Pow(eps, 2) * float64(p))))
 	return int64(math.Round(n_prime))
 }
 
