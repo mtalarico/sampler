@@ -20,31 +20,13 @@ import (
 
 var compare comparer.Comparer
 
-func connectMongo(config cfg.Configuration) (*mongo.Client, *mongo.Client, *mongo.Client) {
-	sourceConfig := config.Source.MakeClientOptions()
-	source, err := mongo.Connect(context.TODO(), sourceConfig)
+func connectMongo(config cfg.MongoOptions) *mongo.Client {
+	opts := config.MakeClientOptions()
+	source, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("cannot connect to source cluster")
 	}
-
-	targetConfig := config.Target.MakeClientOptions()
-	target, err := mongo.Connect(context.TODO(), targetConfig)
-	if err != nil {
-		log.Fatal().Err(err).Msg("cannot connect to target cluster")
-	}
-
-	var meta *mongo.Client
-	if config.Meta.URI != "" {
-		metaConfig := config.Meta.MakeClientOptions()
-		meta, err = mongo.Connect(context.TODO(), metaConfig)
-		if err != nil {
-			log.Fatal().Err(err).Msg("cannot connect to metadata cluster")
-		}
-	} else {
-		meta = target
-	}
-
-	return source, target, meta
+	return source
 }
 
 func init() {
@@ -54,7 +36,15 @@ func init() {
 
 	log.Debug().Msgf("%#v", config)
 
-	source, target, meta := connectMongo(config)
+	source := connectMongo(config.Source)
+	target := connectMongo(config.Target)
+	var meta *mongo.Client
+	if config.Meta.URI != "" {
+		meta = connectMongo(config.Meta)
+	} else {
+		meta = target
+	}
+
 	compare = comparer.NewComparer(config, source, target, meta, startTime)
 }
 
