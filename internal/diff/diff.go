@@ -27,18 +27,18 @@ type pair[T NamedComparable] struct {
 	Target T
 }
 
-type MismatchDetails[T NamedComparable] struct {
+type Diff[T NamedComparable] struct {
 	MissingOnSrc []T
 	MissingOnTgt []T
 	Different    []pair[T]
 	Equal        []T
 }
 
-func (m MismatchDetails[T]) HasMismatches() bool {
+func (m Diff[T]) HasMismatches() bool {
 	return len(m.MissingOnSrc) > 0 || len(m.MissingOnTgt) > 0 || len(m.Different) > 0
 }
 
-func (m MismatchDetails[T]) String() string {
+func (m Diff[T]) String() string {
 	var b strings.Builder
 	b.WriteString("{ ")
 
@@ -72,7 +72,7 @@ func (m MismatchDetails[T]) String() string {
 
 // Walk both sorted slices determining if missing from the source, missing from the target, or are present on both and different.
 // ** assumed slices are sorted before-hand **
-func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) MismatchDetails[T] {
+func Compare[T NamedComparable](logger zerolog.Logger, source []T, target []T) Diff[T] {
 	var missingOnSrc, missingOnTgt, equal []T
 	var different []pair[T]
 	logger = logger.With().Str("c", "diff").Logger()
@@ -80,7 +80,7 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 	srcLen, tgtLen := len(source), len(target)
 	if srcLen == 0 {
 		missingOnSrc = append(missingOnSrc, target...)
-		return MismatchDetails[T]{
+		return Diff[T]{
 			MissingOnSrc: missingOnSrc,
 			MissingOnTgt: missingOnTgt,
 			Different:    different,
@@ -89,7 +89,7 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 	}
 	if tgtLen == 0 {
 		missingOnTgt = append(missingOnTgt, source...)
-		return MismatchDetails[T]{
+		return Diff[T]{
 			MissingOnSrc: missingOnSrc,
 			MissingOnTgt: missingOnTgt,
 			Different:    different,
@@ -145,7 +145,7 @@ func Diff[T NamedComparable](logger zerolog.Logger, source []T, target []T) Mism
 		}
 	}
 
-	return MismatchDetails[T]{
+	return Diff[T]{
 		MissingOnSrc: missingOnSrc,
 		MissingOnTgt: missingOnTgt,
 		Different:    different,

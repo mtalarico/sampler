@@ -17,7 +17,7 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	source, target := c.getIndexes(ctx, namespace)
 
 	// sorted from getIndexSpecs
-	comparison := diff.Diff(logger, source, target)
+	comparison := diff.Compare(logger, source, target)
 
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
