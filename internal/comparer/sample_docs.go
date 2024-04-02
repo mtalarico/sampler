@@ -99,12 +99,11 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 	for cursor.Next(ctx) {
 		var doc bson.Raw
 		cursor.Decode(&doc)
-		logger.Trace().Msgf("deseralized doc %v", doc)
 		buffer.add(doc)
 		docCount++
 
 		if docCount%BATCH_SIZE == 0 {
-			logger.Debug().Msgf("adding batch %d to be checked", batchCount+1)
+			logger.Trace().Msgf("adding batch %d to be checked", batchCount+1)
 			jobs <- documentBatch{
 				dir:   dir,
 				batch: buffer,
@@ -115,7 +114,7 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 	}
 	// if we counted more than one doc but the counter did not land on a clean batch size, flush the rest
 	if len(buffer) != 0 {
-		logger.Debug().Msgf("adding batch %d to be checked", batchCount+1)
+		logger.Trace().Msgf("adding batch %d to be checked", batchCount+1)
 		jobs <- documentBatch{
 			dir:   dir,
 			batch: buffer,
@@ -141,7 +140,6 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 		filter := bson.D{{"_id", value.Lookup("_id")}}
 		// if collection is sharded, include shard key value in query to target that shard
 		if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
-			logger.Trace().Msg("Target is sharded, adding shard key to filter")
 			elems, err := namespace.PartitionKey.Target.Elements()
 			if err != nil {
 				log.Error().Err(err)
@@ -150,7 +148,6 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 				filter = append(filter, bson.E{each.Key(), value.Lookup(each.Key())})
 			}
 		} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
-			logger.Trace().Msg("Source is sharded, adding shard key to filter")
 			elems, err := namespace.PartitionKey.Source.Elements()
 			if err != nil {
 				log.Error().Err(err)
@@ -171,14 +168,12 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	for cursor.Next(ctx) {
 		var doc bson.Raw
 		cursor.Decode(&doc)
-		logger.Trace().Msgf("decoded doc %+v", doc)
 
 		buffer.add(doc)
 	}
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
-	logger.Trace().Msgf("filled buffer %+v", buffer)
 	return documentBatch{
 		dir:   toFind.dir,
 		batch: buffer,
@@ -194,11 +189,9 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 		outer, inner = a.batch, b.batch
 
 	}
-	logger.Trace().Msgf("outer: %s | inner: %s", outer, inner)
 	for key, aDoc := range outer {
-		logger.Trace().Msgf("checking key %s against %s", key, inner[key])
+		logger.Trace().Msgf("comparing key %s", key)
 		if bDoc, ok := inner[key]; ok {
-			logger.Trace().Msgf("comparing %v to %v", aDoc, bDoc)
 			comparison, err := doc.BsonUnorderedCompareRawDocumentWithDetails(aDoc, bDoc)
 			if err != nil {
 				log.Error().Err(err).Msg("")
