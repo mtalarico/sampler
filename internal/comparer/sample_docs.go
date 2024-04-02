@@ -125,6 +125,7 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 
 func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace namespacePair, toFind documentBatch) documentBatch {
 	buffer := make(batch, BATCH_SIZE)
+	useOr := false
 	var coll *mongo.Collection
 	switch toFind.dir {
 	case reporter.SrcToDst:
@@ -136,10 +137,14 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	}
 
 	filters := bson.A{}
-	for _, value := range toFind.batch {
-		filter := bson.D{{"_id", value.Lookup("_id")}}
-		// if collection is sharded, include shard key value in query to target that shard
-		if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
+	if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
+		for _, value := range toFind.batch {
+
+			// TODO reduce duplication in this code
+			// if collection is sharded, include shard key value in query to target that shard
+			filter := bson.D{}
+
+			useOr = true
 			elems, err := namespace.PartitionKey.Target.Elements()
 			if err != nil {
 				log.Error().Err(err)
@@ -147,7 +152,17 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 			for _, each := range elems {
 				filter = append(filter, bson.E{each.Key(), value.Lookup(each.Key())})
 			}
-		} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
+			filter = append(filter, bson.E{"_id", value.Lookup("_id")})
+			filters = append(filters, filter)
+		}
+	} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
+		for _, value := range toFind.batch {
+
+			// TODO reduce duplication in this code
+			// if collection is sharded, include shard key value in query to target that shard
+			filter := bson.D{}
+
+			useOr = true
 			elems, err := namespace.PartitionKey.Source.Elements()
 			if err != nil {
 				log.Error().Err(err)
@@ -155,11 +170,23 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 			for _, each := range elems {
 				filter = append(filter, bson.E{each.Key(), value.Lookup(each.Key())})
 			}
+			filter = append(filter, bson.E{"_id", value.Lookup("_id")})
+			filters = append(filters, filter)
 		}
-		filters = append(filters, filter)
+	} else {
+		for _, value := range toFind.batch {
+			filters = append(filters, value.Lookup("_id"))
+		}
 	}
-	or := bson.D{{"$or", filters}}
-	cursor, err := coll.Find(ctx, or, nil)
+
+	var query bson.D
+	if useOr {
+		query = bson.D{{"$or", filters}}
+	} else {
+		query = bson.D{{"$in", filters}}
+	}
+	log.Debug()
+	cursor, err := coll.Find(ctx, query, nil)
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("")

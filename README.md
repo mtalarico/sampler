@@ -2,7 +2,7 @@
 
 **DISCLAIMER: this is not an official MongoDB product, rather it is experimental code that should be used at your own risk. As with any software, test thoroughly in a lower environment.**
 
-Using statistical sampling to validate two mongodb cluster's sychronization.
+Using statistical sampling based on Cochran's sample size to validate two mongodb cluster's sychronization.
 
 ## Compares
 - estimated document counts
