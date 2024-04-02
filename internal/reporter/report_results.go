@@ -29,6 +29,8 @@ type report struct {
 	direction Direction
 }
 
+// Create new reporter -- uses its own single thread pool and listens for reports to insert
+// to the Meta DB until Reporter.Done() has been called
 func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.Time) Reporter {
 	r := Reporter{
 		metaClient: *meta,
@@ -50,6 +52,7 @@ func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.T
 	return r
 }
 
+// close the reporting queue
 func (r *Reporter) Done(ctx context.Context, logger zerolog.Logger) {
 	logger.Debug().Msg("closing reporter queue and waiting for reporters to finish")
 	close(r.queue)
@@ -239,6 +242,7 @@ func (r *Reporter) report(rep report, logger zerolog.Logger) {
 }
 
 func (r *Reporter) processReports(ctx context.Context, logger zerolog.Logger) {
+	logger.Info().Msgf("starting report processing, view with filter: { run: new Date(\"%s\") }", r.startTime.UTC().Format(time.RFC3339Nano))
 	for rep := range r.queue {
 		logger = logger.With().Str("ns", rep.namespace).Logger()
 		r.report(rep, logger)
