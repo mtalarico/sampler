@@ -22,11 +22,14 @@ type documentBatch struct {
 	batch batch
 }
 
-type batch map[interface{}]bson.Raw
+type batch map[string]bson.Raw
 
 func (b batch) add(doc bson.Raw) {
-	id := doc.Lookup("_id").String()
-	b[id] = doc
+	id := doc.Lookup("_id")
+	key := id.String()
+	if key != "" {
+		b[key] = doc
+	}
 }
 
 func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
@@ -75,11 +78,11 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
 	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
 
-	srcCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(context.TODO(), pipeline, opts)
+	srcCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
-	tgtCursor, err := c.targetCollection(namespace.Db, namespace.Collection).Aggregate(context.TODO(), pipeline, opts)
+	tgtCursor, err := c.targetCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
@@ -93,7 +96,7 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 	batchCount := 0
 	buffer := make(batch, BATCH_SIZE)
 	logger.Debug().Msg("starting cursor walk")
-	for cursor.Next(context.TODO()) {
+	for cursor.Next(ctx) {
 		var doc bson.Raw
 		cursor.Decode(&doc)
 		logger.Trace().Msgf("deseralized doc %v", doc)
@@ -110,7 +113,7 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 			batchCount++
 		}
 	}
-	// if we counted more than one doc but the counter did not land on a clean batch size there should still be items in the map to be checked
+	// if we counted more than one doc but the counter did not land on a clean batch size, flush the rest
 	if len(buffer) != 0 {
 		logger.Debug().Msgf("adding batch %d to be checked", batchCount+1)
 		jobs <- documentBatch{
@@ -123,60 +126,59 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 
 func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespace namespacePair, toFind documentBatch) documentBatch {
 	buffer := make(batch, BATCH_SIZE)
-	var keys []bson.D
+	var coll *mongo.Collection
+	switch toFind.dir {
+	case reporter.SrcToDst:
+		coll = c.targetCollection(namespace.Db, namespace.Collection)
+	case reporter.DstToSrc:
+		coll = c.sourceCollection(namespace.Db, namespace.Collection)
+	default:
+		logger.Fatal().Msg("invalid comparison direction?")
+	}
 
+	filters := bson.A{}
 	for _, value := range toFind.batch {
-		key := bson.D{}
-		// if collection is sharded, include shard key value in query to target shard
+		filter := bson.D{{"_id", value.Lookup("_id")}}
+		// if collection is sharded, include shard key value in query to target that shard
 		if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
+			logger.Trace().Msg("Target is sharded, adding shard key to filter")
 			elems, err := namespace.PartitionKey.Target.Elements()
 			if err != nil {
 				log.Error().Err(err)
 			}
 			for _, each := range elems {
-				key = append(key, bson.E{each.Key(), value.Lookup(each.Key())})
+				filter = append(filter, bson.E{each.Key(), value.Lookup(each.Key())})
 			}
 		} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
+			logger.Trace().Msg("Source is sharded, adding shard key to filter")
 			elems, err := namespace.PartitionKey.Source.Elements()
 			if err != nil {
 				log.Error().Err(err)
 			}
 			for _, each := range elems {
-				key = append(key, bson.E{each.Key(), value.Lookup(each.Key())})
+				filter = append(filter, bson.E{each.Key(), value.Lookup(each.Key())})
 			}
 		}
-		key = append(key, bson.E{"_id", value.Lookup("_id")})
-		keys = append(keys, key)
+		filters = append(filters, filter)
 	}
-	filter := bson.M{"_id": bson.M{"$in": keys}}
-
-	log.Trace().Msgf("filter: %s", filter)
-
-	var cursor *mongo.Cursor
-	var err error
-	opts := options.Find().SetSort(bson.M{"_id": 1})
-
-	switch toFind.dir {
-	case reporter.SrcToDst:
-		cursor, err = c.targetCollection(namespace.Db, namespace.Collection).Find(context.TODO(), filter, opts)
-	case reporter.DstToSrc:
-		cursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Find(context.TODO(), filter, opts)
-	default:
-		logger.Fatal().Msg("invalid comparison direction?")
-	}
+	or := bson.D{{"$or", filters}}
+	cursor, err := coll.Find(ctx, or, nil)
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
-	defer cursor.Close(context.TODO())
-	for cursor.Next(context.TODO()) {
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
 		var doc bson.Raw
 		cursor.Decode(&doc)
+		logger.Trace().Msgf("decoded doc %+v", doc)
+
 		buffer.add(doc)
 	}
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
+	logger.Trace().Msgf("filled buffer %+v", buffer)
 	return documentBatch{
 		dir:   toFind.dir,
 		batch: buffer,
@@ -185,8 +187,17 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 
 func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, namespace namespacePair, a documentBatch, b documentBatch) reporter.DocSummary {
 	var summary reporter.DocSummary
-	for key, aDoc := range a.batch {
-		if bDoc, ok := b.batch[key]; ok {
+	var outer, inner batch
+	if len(b.batch) > len(a.batch) {
+		outer, inner = b.batch, a.batch
+	} else {
+		outer, inner = a.batch, b.batch
+
+	}
+	logger.Trace().Msgf("outer: %s | inner: %s", outer, inner)
+	for key, aDoc := range outer {
+		logger.Trace().Msgf("checking key %s against %s", key, inner[key])
+		if bDoc, ok := inner[key]; ok {
 			logger.Trace().Msgf("comparing %v to %v", aDoc, bDoc)
 			comparison, err := doc.BsonUnorderedCompareRawDocumentWithDetails(aDoc, bDoc)
 			if err != nil {
