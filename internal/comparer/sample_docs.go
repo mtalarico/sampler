@@ -183,7 +183,7 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	if useOr {
 		query = bson.D{{"$or", filters}}
 	} else {
-		query = bson.D{{"$in", filters}}
+		query = bson.D{{"_id", bson.E{"$in", filters}}}
 	}
 	log.Debug()
 	cursor, err := coll.Find(ctx, query, nil)

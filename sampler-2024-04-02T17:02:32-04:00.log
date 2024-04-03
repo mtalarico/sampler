@@ -1,0 +1,13 @@
+{"message":"{\"level\":\"info\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"looking for all user namespaces\"}"}
+{"message":"{\"level\":\"info\",\"c\":\"reporter\",\"w\":0,\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"starting report processing, view with filter: { run: new Date(\\\"2024-04-02T21:02:32.808096Z\\\") }\"}"}
+{"message":"{\"level\":\"warn\",\"c\":\"namespace\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"there are namespace mismatches between source and target\"}"}
+{"message":"{\"level\":\"error\",\"c\":\"namespace\",\"ns\":\"tmp.test\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"tmp.test missing on the target\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"beginning validation\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"count\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"source estimate docs: 306500, target estimate docs: 306500\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"count\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"estimated document match\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"index\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"indexes match.\"}"}
+{"message":"{\"level\":\"warn\",\"w\":1,\"ns\":\"test.test\",\"c\":\"sampleDoc\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"sample size 15784 too large, using maxSize 12260\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"sampleDoc\",\"time\":\"2024-04-02T17:02:32-04:00\",\"message\":\"using sample size of 12260\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"sampleDoc\",\"time\":\"2024-04-02T17:02:33-04:00\",\"message\":\"beginning document sample\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"c\":\"sampleDoc\",\"time\":\"2024-04-02T17:02:34-04:00\",\"message\":\"finished document sample\"}"}
+{"message":"{\"level\":\"info\",\"w\":1,\"ns\":\"test.test\",\"time\":\"2024-04-02T17:02:34-04:00\",\"message\":\"finished validation\"}"}
