@@ -23,7 +23,7 @@ func compareDocuments(srcDoc, dstDoc bson.D) (*MismatchDetails, error) {
 	}
 	dstRaw, err = bson.Marshal(dstDoc)
 	if err != nil {
-		log.Fatal().Err(err).Msgf("Could not marshal test dst document (programming error) %s", dstDoc)
+		log.Fatal().Err(err).Msgf("Could not marshal test tgt document (programming error) %s", dstDoc)
 	}
 	return BsonUnorderedCompareRawDocumentWithDetails(srcRaw, dstRaw)
 }

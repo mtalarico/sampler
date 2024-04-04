@@ -183,9 +183,9 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	if useOr {
 		query = bson.D{{"$or", filters}}
 	} else {
-		query = bson.D{{"_id", bson.E{"$in", filters}}}
+		query = bson.D{{"_id", bson.D{{"$in", filters}}}}
 	}
-	log.Debug()
+	log.Debug().Msgf("sending find: %+v", query)
 	cursor, err := coll.Find(ctx, query, nil)
 
 	if err != nil {
@@ -201,6 +201,7 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
+	logger.Trace().Msgf("buffer %s", buffer)
 	return documentBatch{
 		dir:   toFind.dir,
 		batch: buffer,
@@ -214,8 +215,8 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 		outer, inner = b.batch, a.batch
 	} else {
 		outer, inner = a.batch, b.batch
-
 	}
+	logger.Trace().Msgf("comparing outer %s, inner %s", outer, inner)
 	for key, aDoc := range outer {
 		logger.Trace().Msgf("comparing key %s", key)
 		if bDoc, ok := inner[key]; ok {
@@ -248,14 +249,17 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 }
 
 func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair, jobs chan documentBatch) {
+	errors := false
 	for processing := range jobs {
-		logger = logger.With().Str("dir", string(processing.dir)).Logger()
-		lookedUp := c.batchFind(ctx, logger, namespace, processing)
-		summary := c.batchCompare(ctx, logger, namespace, processing, lookedUp)
+		dirLogger := logger.With().Str("dir", string(processing.dir)).Logger()
+		lookedUp := c.batchFind(ctx, dirLogger, namespace, processing)
+		summary := c.batchCompare(ctx, dirLogger, namespace, processing, lookedUp)
 		if summary.HasMismatches() {
-			logger.Error().Msg("mismatch in batch")
+			errors = true
 			c.reporter.SampleSummary(namespace.String(), processing.dir, summary)
 		}
 	}
-
+	if errors {
+		logger.Error().Msg("documents missing or mismatched")
+	}
 }

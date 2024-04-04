@@ -30,7 +30,7 @@ func (ns namespacePair) Debug() string {
 	if ns.Partitioned.Source {
 		base += ", key: " + ns.PartitionKey.Source.String()
 	}
-	base += " }, dst: { partitioned: " + strconv.FormatBool(ns.Partitioned.Target)
+	base += " }, tgt: { partitioned: " + strconv.FormatBool(ns.Partitioned.Target)
 	if ns.Partitioned.Target {
 		base += ", key: " + ns.PartitionKey.Target.String()
 	}

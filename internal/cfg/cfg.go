@@ -21,15 +21,16 @@ type MongoOptions struct {
 }
 
 type Configuration struct {
-	Source     MongoOptions
-	Target     MongoOptions
-	Meta       MongoOptions
-	Compare    Compare
-	MetaDBName string
-	IncludeNS  *[]string
-	Verbosity  string
-	LogFile    string
-	CleanMeta  bool
+	Source        MongoOptions
+	Target        MongoOptions
+	Meta          MongoOptions
+	Compare       Compare
+	MetaDBName    string
+	IncludeNS     *[]string
+	Verbosity     string
+	LogFile       string
+	CleanMeta     bool
+	ReportFullDoc bool
 }
 
 func Init() Configuration {
@@ -41,7 +42,7 @@ func Init() Configuration {
 	}
 
 	flag.StringVar(&config.Source.URI, "src", "", "source connection string")
-	flag.StringVar(&config.Target.URI, "dst", "", "target connection string")
+	flag.StringVar(&config.Target.URI, "tgt", "", "target connection string")
 	flag.StringVar(&config.Meta.URI, "meta", "", "meta connection string, defaults to target")
 	flag.StringVar(&config.MetaDBName, "metadbname", "sampler", "meta connection string")
 
@@ -53,13 +54,14 @@ func Init() Configuration {
 	flag.StringVar(&config.Verbosity, "verbosity", "info", "log level [ error | warn | info | debug | trace ]")
 	flag.StringVar(&config.LogFile, "log", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
+	flag.BoolVar(&config.ReportFullDoc, "fulldoc", false, "report the whole document in the metadata.docs collection, using this option will add time to the validator and use additional disk space + load on the destination")
 
 	config.IncludeNS = flag.StringArray("ns", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
 
 	flag.Usage = func() {
 		flagSet := flag.CommandLine
 		fmt.Printf("Usage of %s:\n", os.Args[0])
-		required := []string{"src", "dst"}
+		required := []string{"src", "tgt"}
 		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "clean"}
 
 		fmt.Println("[ required ]")
@@ -94,7 +96,7 @@ func (c *Configuration) validate() {
 	}
 	if c.Target.URI == "" {
 		flag.Usage()
-		fmt.Println("missing required parameters: --dst")
+		fmt.Println("missing required parameters: --tgt")
 		os.Exit(1)
 	}
 }

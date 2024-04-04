@@ -15,11 +15,12 @@ import (
 )
 
 type Reporter struct {
-	metaClient mongo.Client
-	metaDBName string
-	startTime  time.Time
-	queue      chan report
-	pool       *worker.Pool
+	metaClient    mongo.Client
+	metaDBName    string
+	startTime     time.Time
+	reportFullDoc bool
+	queue         chan report
+	pool          *worker.Pool
 }
 
 type report struct {
@@ -31,12 +32,13 @@ type report struct {
 
 // Create new reporter -- uses its own single thread pool and listens for reports to insert
 // to the Meta DB until Reporter.Done() has been called
-func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.Time) Reporter {
+func NewReporter(meta *mongo.Client, dbName string, clean bool, startTime time.Time, reportFullDoc bool) Reporter {
 	r := Reporter{
-		metaClient: *meta,
-		metaDBName: dbName,
-		startTime:  startTime,
-		queue:      make(chan report),
+		metaClient:    *meta,
+		metaDBName:    dbName,
+		reportFullDoc: reportFullDoc,
+		startTime:     startTime,
+		queue:         make(chan report),
 	}
 	if clean {
 		r.cleanMetaDB()
@@ -76,7 +78,7 @@ func (r *Reporter) MismatchNamespace(source ns.Namespace, target ns.Namespace) {
 	reason := NS_DIFF
 	details := bson.D{
 		{"src", source},
-		{"dst", target},
+		{"tgt", target},
 	}
 	rep := report{
 		namespace: source.String(),
@@ -90,7 +92,7 @@ func (r *Reporter) MismatchCount(namespace string, src int64, target int64) {
 	reason := COUNT_DIFF
 	details := bson.D{
 		{"src", src},
-		{"dst", target},
+		{"tgt", target},
 	}
 	rep := report{
 		namespace: namespace,
@@ -118,7 +120,7 @@ func (r *Reporter) MismatchIndex(namespace string, src bson.Raw, target bson.Raw
 	reason := INDEX_DIFF
 	details := bson.D{
 		{"src", src},
-		{"dst", target},
+		{"tgt", target},
 	}
 	rep := report{
 		namespace: namespace,
@@ -136,12 +138,12 @@ func (r *Reporter) SampleSummary(namespace string, direction Direction, summary 
 	case DstToSrc:
 		details = append(details, bson.D{
 			bson.E{"docsMissing.src", summary.Missing},
-			bson.E{"docsWithMismatches.DstToTarget", summary.Different},
+			bson.E{"docsWithMismatches.TgtToSrc", summary.Different},
 		}...)
 	case SrcToDst:
 		details = append(details, bson.D{
-			bson.E{"docsMissing.dst", summary.Missing},
-			bson.E{"docsWithMismatches.srcToDst", summary.Different},
+			bson.E{"docsMissing.tgt", summary.Missing},
+			bson.E{"docsWithMismatches.srcToTgt", summary.Different},
 		}...)
 	}
 
@@ -157,9 +159,13 @@ func (r *Reporter) SampleSummary(namespace string, direction Direction, summary 
 func (r *Reporter) MismatchDoc(namespace string, direction Direction, a, b bson.Raw) {
 	reason := DOC_DIFF
 	details := bson.D{
-		{"srcDoc", a},
-		{"dstDoc", b},
 		{"direction", direction},
+		{"key", a.Lookup("_id")},
+	}
+
+	if r.reportFullDoc {
+		details = append(details, primitive.E{"srcDoc", a})
+		details = append(details, primitive.E{"tgtDoc", b})
 	}
 
 	rep := report{
@@ -173,7 +179,9 @@ func (r *Reporter) MismatchDoc(namespace string, direction Direction, a, b bson.
 
 func (r *Reporter) MissingDoc(namespace string, direction Direction, doc bson.Raw) {
 	reason := DOC_MISSING
-	details := bson.D{}
+	details := bson.D{
+		{"key", doc.Lookup("_id")},
+	}
 
 	switch direction {
 	case SrcToDst:
@@ -182,7 +190,9 @@ func (r *Reporter) MissingDoc(namespace string, direction Direction, doc bson.Ra
 		details = append(details, bson.E{"missingFrom", Source})
 	}
 
-	details = append(details, bson.E{"doc", doc})
+	if r.reportFullDoc {
+		details = append(details, bson.E{"doc", doc})
+	}
 
 	rep := report{
 		namespace: namespace,
@@ -211,16 +221,9 @@ func (r *Reporter) report(rep report, logger zerolog.Logger) {
 		var doc bson.Raw
 		doc, err := bson.Marshal(rep.details)
 		if err != nil {
-			log.Error().Err(err).Msg("cannot marshal doc to bson.Raw")
+			log.Error().Err(err).Msg("[internal] cannot marshal details doc to bson.Raw")
 		}
-		var path string
-		if rep.reason == DOC_DIFF {
-			path = "srcDoc"
-		} else {
-			path = "doc"
-		}
-		key := doc.Lookup(path).Document().Lookup("_id")
-		filter = append(filter, bson.E{"key", key})
+		filter = append(filter, bson.E{"key", doc.Lookup("key")})
 		update = bson.D{
 			{"$set", rep.details},
 		}

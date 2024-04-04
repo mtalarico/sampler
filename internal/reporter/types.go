@@ -6,12 +6,12 @@ type Reason string
 
 const (
 	Source Location = "src"
-	Target Location = "dst"
+	Target Location = "tgt"
 )
 
 const (
-	SrcToDst Direction = "src -> dst"
-	DstToSrc Direction = "dst -> src"
+	SrcToDst Direction = "src -> tgt"
+	DstToSrc Direction = "tgt -> src"
 )
 
 const (

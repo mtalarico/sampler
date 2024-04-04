@@ -126,7 +126,7 @@ func Compare[T NamedComparable](logger zerolog.Logger, source []T, target []T) D
 			missingOnTgt = append(missingOnTgt, source[srcItr])
 			srcItr++
 		default: // Equality condition
-			logger.Trace().Msgf("checking Name src %s (itr: %d), dst %s (itr: %d)", srcName, srcItr, tgtName, tgtItr)
+			logger.Trace().Msgf("checking Name src %s (itr: %d), tgt %s (itr: %d)", srcName, srcItr, tgtName, tgtItr)
 			if !source[srcItr].Equal(target[tgtItr]) {
 				logger.Trace().Msgf("srcName (%s) != tgtName (%s)", srcName, tgtName)
 				logger.Trace().Msgf("src %+v | tgt %+v", source[srcItr], target[tgtItr])

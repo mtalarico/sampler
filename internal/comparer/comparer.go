@@ -30,7 +30,7 @@ type Comparer struct {
 
 // init this comparer's reporter before returning internal struct
 func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.Client, meta *mongo.Client, startTime time.Time) Comparer {
-	reporter := reporter.NewReporter(meta, config.MetaDBName, config.CleanMeta, startTime)
+	reporter := reporter.NewReporter(meta, config.MetaDBName, config.CleanMeta, startTime, config.ReportFullDoc)
 
 	return Comparer{
 		config:       config,
