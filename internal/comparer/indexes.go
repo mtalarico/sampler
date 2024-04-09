@@ -41,7 +41,7 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 
 func (c *Comparer) getIndexes(ctx context.Context, namespace namespacePair) ([]idx.Index, []idx.Index) {
 	var sourceSpecs, targetSpecs []bson.Raw
-	sortedIndexesPipeline := bson.A{bson.D{{"$indexStats", bson.D{}}}, bson.D{{"$sort", bson.D{{"spec", 1}}}}, bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}}}
+	sortedIndexesPipeline := bson.A{bson.D{{"$indexStats", bson.D{}}}, bson.D{{"$sort", bson.D{{"spec", 1}}}}, bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}}, bson.D{{"$project", bson.D{{"ns", 0}}}}}
 	sourceCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, sortedIndexesPipeline)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
