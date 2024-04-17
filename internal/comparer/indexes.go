@@ -14,9 +14,7 @@ import (
 func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
 	logger = logger.With().Str("c", "index").Logger()
 
-	source, target := c.getIndexes(ctx, namespace)
-
-	// sorted from getIndexSpecs
+	source, target := c.getSortedIndexes(ctx, namespace)
 	comparison := diff.Compare(logger, source, target)
 
 	logger.Trace().Msgf("%s", comparison.String())
@@ -39,9 +37,14 @@ func (c *Comparer) CompareIndexes(ctx context.Context, logger zerolog.Logger, na
 	}
 }
 
-func (c *Comparer) getIndexes(ctx context.Context, namespace namespacePair) ([]idx.Index, []idx.Index) {
+func (c *Comparer) getSortedIndexes(ctx context.Context, namespace namespacePair) ([]idx.Index, []idx.Index) {
 	var sourceSpecs, targetSpecs []bson.Raw
-	sortedIndexesPipeline := bson.A{bson.D{{"$indexStats", bson.D{}}}, bson.D{{"$sort", bson.D{{"spec", 1}}}}, bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}}}
+	sortedIndexesPipeline := bson.A{
+		bson.D{{"$indexStats", bson.D{}}},
+		bson.D{{"$sort", bson.D{{"spec", 1}}}},
+		bson.D{{"$replaceRoot", bson.D{{"newRoot", "$spec"}}}},
+		bson.D{{"$project", bson.D{{"ns", 0}}}},
+	}
 	sourceCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, sortedIndexesPipeline)
 	if err != nil {
 		log.Fatal().Err(err).Msg("")

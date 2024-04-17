@@ -228,19 +228,18 @@ func (r *Reporter) report(rep report, logger zerolog.Logger) {
 			{"$set", rep.details},
 		}
 	default:
+		// if not updating an existing doc, manually add _id so the upsert filter is unique and an insert occurs
 		filter = append(filter, bson.E{"_id", primitive.NewObjectID()})
 		update = bson.D{
 			{"$set", rep.details},
 		}
 	}
 
-	filterExtJson, _ := bson.MarshalExtJSON(filter, false, true)
-	updateExtJson, _ := bson.MarshalExtJSON(update, false, true)
-	logger.Debug().Msgf("appending summary -- {filter: %s, update: %s}", filterExtJson, updateExtJson)
+	logger.Debug().Msgf("appending summary -- {filter: %s, update: %s}", filter, update)
 	opts := options.Update().SetUpsert(true)
 	_, err := r.getCollection(rep.reason).UpdateOne(context.TODO(), filter, update, opts)
 	if err != nil {
-		logger.Error().Err(err).Msgf("unable to append to doc summary  -- {filter: %s, update: %s}", filterExtJson, updateExtJson)
+		logger.Error().Err(err).Msgf("unable to append to doc summary  -- {filter: %s, update: %s}", filter, update)
 	}
 }
 
