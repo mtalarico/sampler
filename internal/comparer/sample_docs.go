@@ -3,6 +3,7 @@ package comparer
 import (
 	"context"
 	"math"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -16,6 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+const retryInterval = 500 * time.Millisecond
 
 type documentBatch struct {
 	dir   reporter.Direction
@@ -78,14 +81,27 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
 	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
 
-	srcCursor, err := c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+	var srcCursor, tgtCursor *mongo.Cursor
+	var err error
+
+	for {
+		srcCursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
+		if err == nil {
+			break
+		}
+		logger.Error().Err(err).Msgf("Error aggregating source collection. Retrying...")
+		time.Sleep(retryInterval)
 	}
-	tgtCursor, err := c.targetCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+
+	for {
+		tgtCursor, err = c.targetCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
+		if err == nil {
+			break
+		}
+		logger.Error().Err(err).Msgf("Error sampling target collection. Retrying...")
+		time.Sleep(retryInterval)
 	}
+
 	return srcCursor, tgtCursor
 }
 
