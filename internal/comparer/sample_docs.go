@@ -78,7 +78,7 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	pool.Done()
 	logger.Info().Msg("finished document sample")
 	totals.lock.Lock()
-	logger.Info().Msgf("namespace %s - sampling result -  %d missing on source | %d missing on target | %d of %d mismatched from src -> tgt | %d of %d mismatched from tgt -> src |", totals.ns, totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
+	logger.Info().Msgf("namespace %s - sampling result -  %d missing on source | %d missing on target | %d / %d mismatched from src -> tgt | %d / %d mismatched from tgt -> src |", totals.ns, totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
 	totals.lock.Unlock()
 }
 
