@@ -11,6 +11,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type Direction string
+
+const (
+	SrcToTgt Direction = "src -> tgt"
+	TgtToSrc Direction = "tgt -> src"
+)
+
 type Pair[T any] struct {
 	Source T
 	Target T

@@ -1,17 +1,11 @@
 package reporter
 
 type Location string
-type Direction string
 type Reason string
 
 const (
 	Source Location = "src"
 	Target Location = "tgt"
-)
-
-const (
-	SrcToDst Direction = "src -> tgt"
-	DstToSrc Direction = "tgt -> src"
 )
 
 const (

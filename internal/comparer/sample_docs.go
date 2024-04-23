@@ -3,6 +3,7 @@ package comparer
 import (
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -21,7 +22,7 @@ import (
 const retryInterval = 500 * time.Millisecond
 
 type documentBatch struct {
-	dir   reporter.Direction
+	dir   util.Direction
 	batch batch
 }
 
@@ -35,7 +36,28 @@ func (b batch) add(doc bson.Raw) {
 	}
 }
 
+type collectionTotals struct {
+	ns               string
+	lock             sync.Mutex
+	sampledSrc       int64
+	sampledTgt       int64
+	missingSrc       int64
+	missingTgt       int64
+	mismatchSrcToTgt int64
+	mismatchTgtToSrc int64
+}
+
 func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair) {
+	totals := collectionTotals{
+		ns:               namespace.String(),
+		lock:             sync.Mutex{},
+		sampledSrc:       0,
+		sampledTgt:       0,
+		missingSrc:       0,
+		missingTgt:       0,
+		mismatchSrcToTgt: 0,
+		mismatchTgtToSrc: 0,
+	}
 	logger = logger.With().Str("c", "sampleDoc").Logger()
 	source, target := c.sampleCursors(ctx, logger, namespace)
 	defer source.Close(ctx)
@@ -45,16 +67,19 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "sampleDocWorkers", "sdw")
 	pool.Start(func(iCtx context.Context, iLogger zerolog.Logger) {
-		c.processDocs(iCtx, iLogger, namespace, jobs)
+		c.processDocs(iCtx, iLogger, namespace, jobs, &totals)
 	})
 
 	logger.Info().Msg("beginning document sample")
-	streamBatches(ctx, logger, jobs, reporter.SrcToDst, source)
-	streamBatches(ctx, logger, jobs, reporter.DstToSrc, target)
+	streamBatches(ctx, logger, jobs, util.SrcToTgt, source, &totals)
+	streamBatches(ctx, logger, jobs, util.TgtToSrc, target, &totals)
 
 	close(jobs)
 	pool.Done()
 	logger.Info().Msg("finished document sample")
+	totals.lock.Lock()
+	logger.Info().Msgf("namespace %s - sampling result -  %d missing on source | %d missing on target | %d of %d mismatched from src -> tgt | %d of %d mismatched from tgt -> src |", totals.ns, totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
+	totals.lock.Unlock()
 }
 
 func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, namespace namespacePair) int64 {
@@ -84,13 +109,13 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	var srcCursor, tgtCursor *mongo.Cursor
 	var err error
 
-	// added retries to avoid $sample error, see HELP-46067 for more info
+	// added retries to avoid $sample error described in HELP-46067
 	for {
 		srcCursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
 		if err == nil {
 			break
 		}
-		logger.Debug().Err(err).Msgf("Error aggregating source collection. Retrying...")
+		logger.Debug().Err(err).Msgf("Error sampling source collection. Retrying...")
 		time.Sleep(retryInterval)
 	}
 
@@ -107,7 +132,7 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 }
 
 // TODO VARIABLE BATCH SIZE
-func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documentBatch, dir reporter.Direction, cursor *mongo.Cursor) {
+func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documentBatch, dir util.Direction, cursor *mongo.Cursor, totals *collectionTotals) {
 	logger = logger.With().Str("dir", string(dir)).Logger()
 	docCount := 0
 	batchCount := 0
@@ -145,16 +170,16 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 	useOr := false
 	var coll *mongo.Collection
 	switch toFind.dir {
-	case reporter.SrcToDst:
+	case util.SrcToTgt:
 		coll = c.targetCollection(namespace.Db, namespace.Collection)
-	case reporter.DstToSrc:
+	case util.TgtToSrc:
 		coll = c.sourceCollection(namespace.Db, namespace.Collection)
 	default:
 		logger.Fatal().Msg("invalid comparison direction?")
 	}
 
 	filters := bson.A{}
-	if toFind.dir == reporter.SrcToDst && namespace.Partitioned.Target {
+	if toFind.dir == util.SrcToTgt && namespace.Partitioned.Target {
 		for _, value := range toFind.batch {
 
 			// TODO reduce duplication in this code
@@ -172,7 +197,7 @@ func (c *Comparer) batchFind(ctx context.Context, logger zerolog.Logger, namespa
 			filter = append(filter, bson.E{"_id", value.Lookup("_id")})
 			filters = append(filters, filter)
 		}
-	} else if toFind.dir == reporter.DstToSrc && namespace.Partitioned.Source {
+	} else if toFind.dir == util.TgtToSrc && namespace.Partitioned.Source {
 		for _, value := range toFind.batch {
 
 			// TODO reduce duplication in this code
@@ -265,7 +290,7 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 	return summary
 }
 
-func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair, jobs chan documentBatch) {
+func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair, jobs chan documentBatch, totals *collectionTotals) {
 	errors := false
 	for processing := range jobs {
 		dirLogger := logger.With().Str("dir", string(processing.dir)).Logger()
@@ -274,6 +299,18 @@ func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, names
 		if summary.HasMismatches() {
 			errors = true
 			c.reporter.SampleSummary(namespace.String(), processing.dir, summary)
+			totals.lock.Lock()
+			switch processing.dir {
+			case util.SrcToTgt:
+				totals.mismatchSrcToTgt += int64(summary.Different)
+				totals.missingTgt += int64(summary.Missing)
+				totals.sampledSrc += int64(summary.Equal) + int64(summary.Missing) + int64(summary.Different)
+			case util.TgtToSrc:
+				totals.mismatchTgtToSrc += int64(summary.Different)
+				totals.missingSrc += int64(summary.Missing)
+				totals.sampledTgt += int64(summary.Equal) + int64(summary.Missing) + int64(summary.Different)
+			}
+			totals.lock.Unlock()
 		}
 	}
 	if errors {

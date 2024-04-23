@@ -3,6 +3,7 @@ package reporter
 import (
 	"context"
 	"sampler/internal/ns"
+	"sampler/internal/util"
 	"sampler/internal/worker"
 	"time"
 
@@ -27,7 +28,7 @@ type report struct {
 	namespace string
 	reason    Reason
 	details   bson.D
-	direction Direction
+	direction util.Direction
 }
 
 // Create new reporter -- uses its own single thread pool and listens for reports to insert
@@ -130,17 +131,17 @@ func (r *Reporter) MismatchIndex(namespace string, src bson.Raw, target bson.Raw
 	r.queue <- rep
 }
 
-func (r *Reporter) SampleSummary(namespace string, direction Direction, summary DocSummary) {
+func (r *Reporter) SampleSummary(namespace string, direction util.Direction, summary DocSummary) {
 	reason := COLL_SUMMARY
 	details := bson.D{}
 
 	switch direction {
-	case DstToSrc:
+	case util.TgtToSrc:
 		details = append(details, bson.D{
 			bson.E{"docsMissing.src", summary.Missing},
-			bson.E{"docsWithMismatches.TgtToSrc", summary.Different},
+			bson.E{"docsWithMismatches.tgtToSrc", summary.Different},
 		}...)
-	case SrcToDst:
+	case util.SrcToTgt:
 		details = append(details, bson.D{
 			bson.E{"docsMissing.tgt", summary.Missing},
 			bson.E{"docsWithMismatches.srcToTgt", summary.Different},
@@ -156,7 +157,7 @@ func (r *Reporter) SampleSummary(namespace string, direction Direction, summary 
 	r.queue <- rep
 }
 
-func (r *Reporter) MismatchDoc(namespace string, direction Direction, a, b bson.Raw) {
+func (r *Reporter) MismatchDoc(namespace string, direction util.Direction, a, b bson.Raw) {
 	reason := DOC_DIFF
 	details := bson.D{
 		{"direction", direction},
@@ -177,16 +178,16 @@ func (r *Reporter) MismatchDoc(namespace string, direction Direction, a, b bson.
 	r.queue <- rep
 }
 
-func (r *Reporter) MissingDoc(namespace string, direction Direction, doc bson.Raw) {
+func (r *Reporter) MissingDoc(namespace string, direction util.Direction, doc bson.Raw) {
 	reason := DOC_MISSING
 	details := bson.D{
 		{"key", doc.Lookup("_id")},
 	}
 
 	switch direction {
-	case SrcToDst:
+	case util.SrcToTgt:
 		details = append(details, bson.E{"missingFrom", Target})
-	case DstToSrc:
+	case util.TgtToSrc:
 		details = append(details, bson.E{"missingFrom", Source})
 	}
 
