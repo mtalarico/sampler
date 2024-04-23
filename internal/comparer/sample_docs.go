@@ -84,12 +84,13 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	var srcCursor, tgtCursor *mongo.Cursor
 	var err error
 
+	// added retries to avoid $sample error, see HELP-46067 for more info
 	for {
 		srcCursor, err = c.sourceCollection(namespace.Db, namespace.Collection).Aggregate(ctx, pipeline, opts)
 		if err == nil {
 			break
 		}
-		logger.Error().Err(err).Msgf("Error aggregating source collection. Retrying...")
+		logger.Debug().Err(err).Msgf("Error aggregating source collection. Retrying...")
 		time.Sleep(retryInterval)
 	}
 
@@ -98,7 +99,7 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 		if err == nil {
 			break
 		}
-		logger.Error().Err(err).Msgf("Error sampling target collection. Retrying...")
+		logger.Debug().Err(err).Msgf("Error sampling target collection. Retrying...")
 		time.Sleep(retryInterval)
 	}
 
