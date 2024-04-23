@@ -77,8 +77,13 @@ func (c *Comparer) CompareSampleDocs(ctx context.Context, logger zerolog.Logger,
 	close(jobs)
 	pool.Done()
 	logger.Info().Msg("finished document sample")
+	// unnecessary locking, but rather safe than sorry
 	totals.lock.Lock()
-	logger.Info().Msgf("sampling result -  %d missing on source | %d missing on target | %d out of %d sampled source documents mismatched | %d out of %d sampled target documents mismatched", totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
+	if totals.mismatchSrcToTgt > 0 || totals.mismatchTgtToSrc > 0 || totals.missingSrc > 0 || totals.missingTgt > 0 {
+		logger.Error().Msgf("sampling result -  %d missing on source | %d missing on target | %d out of %d sampled source documents mismatched | %d out of %d sampled target documents mismatched - failure", totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
+	} else {
+		logger.Info().Msgf("sampling result -  %d missing on source | %d missing on target | %d out of %d sampled source documents mismatched | %d out of %d sampled target documents mismatched - success", totals.missingSrc, totals.missingTgt, totals.mismatchSrcToTgt, totals.sampledSrc, totals.mismatchTgtToSrc, totals.sampledTgt)
+	}
 	totals.lock.Unlock()
 }
 
@@ -291,13 +296,11 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 }
 
 func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, namespace namespacePair, jobs chan documentBatch, totals *collectionTotals) {
-	errors := false
 	for processing := range jobs {
 		dirLogger := logger.With().Str("dir", string(processing.dir)).Logger()
 		lookedUp := c.batchFind(ctx, dirLogger, namespace, processing)
 		summary := c.batchCompare(ctx, dirLogger, namespace, processing, lookedUp)
 		if summary.HasMismatches() {
-			errors = true
 			c.reporter.SampleSummary(namespace.String(), processing.dir, summary)
 			totals.lock.Lock()
 			switch processing.dir {
@@ -312,8 +315,5 @@ func (c *Comparer) processDocs(ctx context.Context, logger zerolog.Logger, names
 			}
 			totals.lock.Unlock()
 		}
-	}
-	if errors {
-		logger.Error().Msg("documents missing or mismatched")
 	}
 }
