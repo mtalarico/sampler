@@ -71,21 +71,22 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 	}
 }
 
+// Preforms comparison on every namespace-pair
 func (c *Comparer) Compare(ctx context.Context) {
 	logger := log.With().Logger()
 
 	// create threads and start them listening to process namespaces put on the channel
-	namespacesToProcess := make(chan namespacePair)
+	namespacesToCompare := make(chan namespacePair)
 	pool := worker.NewWorkerPool(logger, NUM_WORKERS, "namespaceWorkers")
 	pool.Start(func(innerCtx context.Context, innerLogger zerolog.Logger) {
-		c.processNS(innerCtx, innerLogger, namespacesToProcess)
+		c.processNS(innerCtx, innerLogger, namespacesToCompare)
 	})
 
 	// use the main thread to go get namespaces and put them on worker channels
-	c.streamNamespaces(ctx, logger, namespacesToProcess)
+	c.streamNamespaces(ctx, logger, namespacesToCompare)
 
-	// clean up and wait to signal to reporter that no more namespaces will be added reporting
-	close(namespacesToProcess)
+	// clean up and wait to signal to reporter that no more namespaces will be added for reporting
+	close(namespacesToCompare)
 	pool.Done()
 	c.reporter.Done(ctx, logger)
 }
@@ -99,6 +100,7 @@ func (c *Comparer) CompareNs(ctx context.Context, logger zerolog.Logger, namespa
 	logger.Info().Msg("finished validation")
 }
 
+// internal worker method that compares each namespace channel it recieves on the channel
 func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs chan namespacePair) {
 	for namespace := range jobs {
 		logger = logger.With().Str("ns", namespace.String()).Logger()
@@ -106,12 +108,12 @@ func (c *Comparer) processNS(ctx context.Context, logger zerolog.Logger, jobs ch
 	}
 }
 
-// return a handle to the source collection for a namespace
+// internal helper to return a handle to the source collection for a namespace
 func (c *Comparer) sourceCollection(db string, coll string) *mongo.Collection {
 	return c.sourceClient.Database(db).Collection(coll)
 }
 
-// return a handle to the target collection for a namespace
+// internal helper to return a handle to the target collection for a namespace
 func (c *Comparer) targetCollection(db string, coll string) *mongo.Collection {
 	return c.targetClient.Database(db).Collection(coll)
 }

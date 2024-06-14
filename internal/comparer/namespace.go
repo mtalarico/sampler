@@ -50,7 +50,7 @@ func (c *Comparer) streamNamespaces(ctx context.Context, logger zerolog.Logger, 
 	sortedSource := diff.SortSpec(source)
 	sortedTarget := diff.SortSpec(target)
 
-	comparison := diff.Compare(logger, sortedSource, sortedTarget)
+	comparison := diff.CompareSorted(logger, sortedSource, sortedTarget)
 	logger.Trace().Msgf("%s", comparison.String())
 	if comparison.HasMismatches() {
 		logger.Warn().Msg("there are namespace mismatches between source and target")

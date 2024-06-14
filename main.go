@@ -18,7 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var compare comparer.Comparer
+var sampler comparer.Comparer
 
 func connectMongo(config cfg.MongoOptions) *mongo.Client {
 	opts := config.MakeClientOptions()
@@ -45,10 +45,10 @@ func init() {
 		meta = target
 	}
 
-	compare = comparer.NewComparer(config, source, target, meta, startTime)
+	sampler = comparer.NewComparer(config, source, target, meta, startTime)
 }
 
 func main() {
 	ctx := context.Background()
-	compare.Compare(ctx)
+	sampler.Compare(ctx)
 }

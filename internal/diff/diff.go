@@ -67,7 +67,7 @@ func (m Diff[T]) String() string {
 
 // Walk both sorted slices determining if missing from the source, missing from the target, or are present on both and different.
 // ** assumed slices are sorted before-hand **
-func Compare[T NamedComparable](logger zerolog.Logger, source []T, target []T) Diff[T] {
+func CompareSorted[T NamedComparable](logger zerolog.Logger, source []T, target []T) Diff[T] {
 	var missingOnSrc, missingOnTgt, equal []T
 	var different []util.Pair[T]
 	logger = logger.With().Str("c", "diff").Logger()
