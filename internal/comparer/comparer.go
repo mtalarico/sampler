@@ -2,6 +2,8 @@ package comparer
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"sampler/internal/cfg"
 	"sampler/internal/reporter"
 	"sampler/internal/worker"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -26,17 +29,45 @@ type Comparer struct {
 	sourceClient mongo.Client
 	targetClient mongo.Client
 	reporter     *reporter.Reporter
+	nsFilters    map[string]bson.D
 }
 
 // init this comparer's reporter before returning internal struct
 func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.Client, meta *mongo.Client, startTime time.Time) Comparer {
+	nsFilters := make(map[string]bson.D)
 	reporter := reporter.NewReporter(meta, config.MetaDBName, config.CleanMeta, startTime, config.ReportFullDoc)
+
+	if config.Filter != "" {
+		var rawMap map[string]json.RawMessage
+		raw, err := os.ReadFile(config.Filter)
+		if err != nil {
+			log.Error().Err(err).Msg("")
+		}
+		log.Trace().Msgf("opened and read filter path %s", config.Filter)
+		err = json.Unmarshal(raw, &rawMap)
+		if err != nil {
+			log.Error().Err(err).Msg("")
+		}
+		log.Trace().Msgf("raw map %s", rawMap)
+
+		for namespace, rawValue := range rawMap {
+			var filter bson.D
+			err = bson.UnmarshalExtJSON(rawValue, false, &filter)
+			if err != nil {
+				log.Error().Err(err).Msg("")
+			}
+
+			nsFilters[namespace] = filter
+		}
+		log.Debug().Msgf("using namespaces filters")
+	}
 
 	return Comparer{
 		config:       config,
 		sourceClient: *source,
 		targetClient: *target,
 		reporter:     &reporter,
+		nsFilters:    nsFilters,
 	}
 }
 

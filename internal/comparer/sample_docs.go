@@ -107,7 +107,11 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	sampleSize := c.GetSampleSize(ctx, logger, namespace)
 	logger.Info().Msgf("using sample size of %d", sampleSize)
 
-	pipeline := bson.A{bson.D{{"$sample", bson.D{{"size", sampleSize}}}}, bson.D{{"$sort", bson.D{{"_id", 1}}}}}
+	pipeline := bson.A{bson.D{{"$sample", bson.D{{"size", sampleSize}}}}}
+	if c.nsFilters[namespace.String()] != nil {
+		pipeline = append(pipeline, bson.D{{"$match", c.nsFilters[namespace.String()]}})
+	}
+	pipeline = append(pipeline, bson.D{{"$sort", bson.D{{"_id", 1}}}})
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
 	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
 

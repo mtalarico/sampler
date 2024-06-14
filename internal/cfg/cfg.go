@@ -29,6 +29,7 @@ type Configuration struct {
 	IncludeNS     *[]string
 	Verbosity     string
 	LogFile       string
+	Filter        string
 	CleanMeta     bool
 	ReportFullDoc bool
 }
@@ -52,7 +53,9 @@ func Init() Configuration {
 	flag.Int64Var(&config.Compare.ForceSampleSize, "forceSampleSize", 0, "override sampling logic and specify fixed number of docs to check")
 
 	flag.StringVar(&config.Verbosity, "verbosity", "info", "log level [ error | warn | info | debug | trace ]")
-	flag.StringVar(&config.LogFile, "log", "", "path to where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
+	flag.StringVar(&config.LogFile, "log", "", "path where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
+	flag.StringVar(&config.Filter, "filter", "", "path to filter file containing a list of namespaces to extended JSON filter (e.x: [ { \"test.test\": { \"ts\": { \"$gt\": { \"$date\": ... } } } } ])")
+
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.ReportFullDoc, "fulldoc", false, "report the whole document in the metadata.docs collection, using this option will add time to the validator and use additional disk space + load on the destination")
 
