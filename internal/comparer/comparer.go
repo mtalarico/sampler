@@ -41,12 +41,12 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 		var rawMap map[string]json.RawMessage
 		raw, err := os.ReadFile(config.Filter)
 		if err != nil {
-			log.Error().Err(err).Msg("")
+			log.Fatal().Err(err).Msg("")
 		}
 		log.Trace().Msgf("opened and read filter path %s", config.Filter)
 		err = json.Unmarshal(raw, &rawMap)
 		if err != nil {
-			log.Error().Err(err).Msg("")
+			log.Fatal().Err(err).Msg("")
 		}
 		log.Trace().Msgf("raw map %s", rawMap)
 
@@ -54,7 +54,7 @@ func NewComparer(config cfg.Configuration, source *mongo.Client, target *mongo.C
 			var filter bson.D
 			err = bson.UnmarshalExtJSON(rawValue, false, &filter)
 			if err != nil {
-				log.Error().Err(err).Msg("")
+				log.Fatal().Err(err).Msg("")
 			}
 
 			nsFilters[namespace] = filter
