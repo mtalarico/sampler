@@ -89,6 +89,7 @@ func (c *Comparer) Compare(ctx context.Context) {
 	close(namespacesToCompare)
 	pool.Done()
 	c.reporter.Done(ctx, logger)
+	logger.Info().Msg("all namespaces finished")
 }
 
 // Preforms comparison on a single namespace-pair
