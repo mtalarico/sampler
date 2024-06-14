@@ -54,7 +54,7 @@ func Init() Configuration {
 
 	flag.StringVar(&config.Verbosity, "verbosity", "info", "log level [ error | warn | info | debug | trace ]")
 	flag.StringVar(&config.LogFile, "log", "", "path where log file should be stored. If not provided, no file is generated. The file name will be sampler-{datetime}.log for each run")
-	flag.StringVar(&config.Filter, "filter", "", "path to filter file containing a list of namespaces to extended JSON filter (e.x: [ { \"test.test\": { \"ts\": { \"$gt\": { \"$date\": ... } } } } ])")
+	flag.StringVar(&config.Filter, "filter", "", "path to filter file containing a list of namespaces to extended JSON filter (e.x: { \"test.test\": { \"ts\": { \"$gt\": { \"$date\": ... } } } })")
 
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.ReportFullDoc, "fulldoc", false, "report the whole document in the metadata.docs collection, using this option will add time to the validator and use additional disk space + load on the destination")
@@ -65,7 +65,7 @@ func Init() Configuration {
 		flagSet := flag.CommandLine
 		fmt.Printf("Usage of %s:\n", os.Args[0])
 		required := []string{"src", "tgt"}
-		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "clean"}
+		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "filter", "clean"}
 
 		fmt.Println("[ required ]")
 		for _, name := range required {
