@@ -92,8 +92,8 @@ func (c *Comparer) GetSampleSize(ctx context.Context, logger zerolog.Logger, nam
 		return c.config.Compare.ForceSampleSize
 	}
 	source, target := c.GetEstimates(ctx, namespace)
-	// we warn about estimated counts, but they are not guarenteed to be equal, so sample from the larger of both collections
-	max := util.Max64(source, target)
+	// we warn about estimated counts, but they are not guarenteed to be equal, so sample from the smaller of both collections
+	max := util.Min64(source, target)
 	ceiling := int64(math.Round(float64(max) * 0.04))
 	sampleSize := util.GetSampleSize(max, c.config.Compare.Zscore, c.config.Compare.ErrorRate)
 	if ceiling > 100 && sampleSize > ceiling {
@@ -108,9 +108,13 @@ func (c *Comparer) sampleCursors(ctx context.Context, logger zerolog.Logger, nam
 	logger.Info().Msgf("using sample size of %d", sampleSize)
 
 	pipeline := bson.A{bson.D{{"$sample", bson.D{{"size", sampleSize}}}}}
+
+	// if a filter was provided for this namespace, include it in the aggregation to get the docs
+	// WARNING: this can result in less than the sample-size of documents, which can be problematic for the integrity of results
 	if c.nsFilters[namespace.String()] != nil {
 		pipeline = append(pipeline, bson.D{{"$match", c.nsFilters[namespace.String()]}})
 	}
+
 	pipeline = append(pipeline, bson.D{{"$sort", bson.D{{"_id", 1}}}})
 	opts := options.Aggregate().SetAllowDiskUse(true).SetBatchSize(int32(BATCH_SIZE))
 	logger.Debug().Any("pipeline", pipeline).Any("options", opts).Msg("aggregating")
