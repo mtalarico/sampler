@@ -153,7 +153,10 @@ func streamBatches(ctx context.Context, logger zerolog.Logger, jobs chan documen
 	logger.Debug().Msg("starting cursor walk")
 	for cursor.Next(ctx) {
 		var doc bson.Raw
-		cursor.Decode(&doc)
+		err := cursor.Decode(&doc)
+		if err != nil {
+			logger.Error().Err(err).Msg("")
+		}
 		buffer.add(doc)
 		docCount++
 

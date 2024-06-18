@@ -71,13 +71,13 @@ func Init() Configuration {
 
 		fmt.Println("[ required ]")
 		for _, name := range required {
-			flag := flagSet.Lookup(name)
-			fmt.Printf("  --%-14s%s\n", flag.Name, flag.Usage)
+			f := flagSet.Lookup(name)
+			fmt.Printf("  --%-14s%s\n", f.Name, f.Usage)
 		}
 		fmt.Println("[ optional ]")
 		for _, name := range optional {
-			flag := flagSet.Lookup(name)
-			fmt.Printf("  --%-14s%s\n", flag.Name, flag.Usage)
+			f := flagSet.Lookup(name)
+			fmt.Printf("  --%-14s%s\n", f.Name, f.Usage)
 		}
 	}
 
