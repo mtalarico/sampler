@@ -21,17 +21,18 @@ type MongoOptions struct {
 }
 
 type Configuration struct {
-	Source        MongoOptions
-	Target        MongoOptions
-	Meta          MongoOptions
-	Compare       Compare
-	MetaDBName    string
-	IncludeNS     *[]string
-	Verbosity     string
-	LogFile       string
-	Filter        string
-	CleanMeta     bool
-	ReportFullDoc bool
+	Source         MongoOptions
+	Target         MongoOptions
+	Meta           MongoOptions
+	Compare        Compare
+	MetaDBName     string
+	IncludeNS      *[]string
+	Verbosity      string
+	LogFile        string
+	Filter         string
+	CleanMeta      bool
+	ReportFullDoc  bool
+	SkipDocReports bool
 }
 
 func Init() Configuration {
@@ -58,6 +59,7 @@ func Init() Configuration {
 
 	flag.BoolVar(&config.CleanMeta, "clean", false, "drops metadata collection before reporting results")
 	flag.BoolVar(&config.ReportFullDoc, "fulldoc", false, "report the whole document in the metadata.docs collection, using this option will add time to the validator and use additional disk space + load on the destination")
+	flag.BoolVar(&config.SkipDocReports, "nodoc", false, "skips inserting details of doc _ids and whether they were missing or different")
 
 	config.IncludeNS = flag.StringArray("ns", nil, "namespace to check, pass this flag multiple times to check multiple namespaces")
 
@@ -65,7 +67,7 @@ func Init() Configuration {
 		flagSet := flag.CommandLine
 		fmt.Printf("Usage of %s:\n", os.Args[0])
 		required := []string{"src", "tgt"}
-		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "filter", "clean"}
+		optional := []string{"ns", "meta", "metadbname", "verbosity", "log", "filter", "clean", "fulldoc", "nodoc"}
 
 		fmt.Println("[ required ]")
 		for _, name := range required {

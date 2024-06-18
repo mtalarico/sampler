@@ -292,11 +292,15 @@ func (c *Comparer) batchCompare(ctx context.Context, logger zerolog.Logger, name
 			if len(comparison.FieldContentsDiffer) > 0 {
 				logger.Debug().Msgf("%s is different between the source and target", key)
 			}
-			c.reporter.MismatchDoc(namespace.String(), a.dir, aDoc, bDoc)
+			if !c.config.SkipDocReports {
+				c.reporter.MismatchDoc(namespace.String(), a.dir, aDoc, bDoc)
+			}
 			summary.Different++
 		} else {
 			logger.Debug().Msgf("_id %v not found", key)
-			c.reporter.MissingDoc(namespace.String(), a.dir, aDoc)
+			if !c.config.SkipDocReports {
+				c.reporter.MissingDoc(namespace.String(), a.dir, aDoc)
+			}
 			summary.Missing++
 		}
 	}
